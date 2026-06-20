@@ -1,0 +1,18 @@
+﻿@page "/intro-info"
+
+<main class="intro-page">
+    <div class="intro-actions">
+        <button type="button" class="intro-back-button" @onclick="GoBackToAnalyzer">Back to calculator</button>
+    </div>
+
+    <article class="intro-content">
+        @if (string.IsNullOrWhiteSpace(_markdownText))
+        {
+            <p>Loading...</p>
+        }
+        else
+        {
+            @((MarkupString)_markdownText)
+        }
+    </article>
+</main>

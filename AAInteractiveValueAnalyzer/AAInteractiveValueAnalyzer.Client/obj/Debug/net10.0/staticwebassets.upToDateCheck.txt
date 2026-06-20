@@ -1,0 +1,4 @@
+wwwroot\appsettings.Development.json
+wwwroot\appsettings.json
+C:\Users\adamh\source\repos\AAInteractiveValueAnalyzer\AAInteractiveValueAnalyzer\AAInteractiveValueAnalyzer.Client\wwwroot\appsettings.Development.json
+C:\Users\adamh\source\repos\AAInteractiveValueAnalyzer\AAInteractiveValueAnalyzer\AAInteractiveValueAnalyzer.Client\wwwroot\appsettings.json

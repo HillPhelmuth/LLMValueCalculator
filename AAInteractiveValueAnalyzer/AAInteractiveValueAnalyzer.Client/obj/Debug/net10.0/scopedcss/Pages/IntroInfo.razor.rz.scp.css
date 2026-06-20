@@ -1,0 +1,35 @@
+.intro-page[b-bpplxmte7a] {
+    padding: 1rem 1rem 2rem;
+}
+
+.intro-actions[b-bpplxmte7a] {
+    position: sticky;
+    top: 0.75rem;
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 1rem;
+    z-index: 10;
+}
+
+.intro-back-button[b-bpplxmte7a] {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.7rem 1rem;
+    border: 1px solid rgba(15, 23, 42, 0.16);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.94);
+    color: #0f172a;
+    font-weight: 700;
+    box-shadow: 0 0.6rem 1.6rem rgba(15, 23, 42, 0.12);
+    backdrop-filter: blur(10px);
+}
+
+.intro-back-button:hover[b-bpplxmte7a] {
+    background: #ffffff;
+}
+
+.intro-content[b-bpplxmte7a] {
+    max-width: 72rem;
+    margin: 0 auto;
+}

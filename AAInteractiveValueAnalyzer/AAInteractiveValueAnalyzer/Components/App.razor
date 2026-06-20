@@ -1,0 +1,49 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <ResourcePreloader />
+    <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["AAInteractiveValueAnalyzer.styles.css"]" />
+    <title>Model EV Calculator</title>
+    <meta name="description" content="Calculate the expected value for your available LLMs." />
+    <meta name="author" content="Adam Holm">
+    <meta name="keywords" content="LLM, ROI, EV, Calculator, AI, Machine Learning, tokens, AI value, model selection, model evaluation, evaluation, Large Language Models, Artificial Intelligence, Artifical Analysis">
+    <ImportMap />
+    <link rel="icon" type="image/jpeg" href="LlmRoiCalc-icon.jpg" />
+    <HeadOutlet @rendermode="InteractiveWebAssembly" />
+</head>
+
+<body>
+    <Routes @rendermode="InteractiveWebAssembly" />
+    <script>
+        window.aaInteractiveValueAnalyzer = {
+            downloadTextFile: function (fileName, content, contentType) {
+                const blob = new Blob([content], { type: contentType || "text/plain;charset=utf-8" });
+                const objectUrl = URL.createObjectURL(blob);
+                const anchor = document.createElement("a");
+                anchor.href = objectUrl;
+                anchor.download = fileName;
+                document.body.appendChild(anchor);
+                anchor.click();
+                anchor.remove();
+                setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 0);
+            },
+            goBackOrHome: function (fallbackUrl) {
+                if (window.history.length > 1) {
+                    window.history.back();
+                    return;
+                }
+
+                window.location.assign(fallbackUrl || "/");
+            }
+        };
+    </script>
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+</body>
+
+</html>

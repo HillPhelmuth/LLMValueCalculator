@@ -1,0 +1,41 @@
+.calculation-audit-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    list-style: none;
+}
+
+    .calculation-audit-summary::-webkit-details-marker {
+        display: none;
+    }
+
+.calculation-audit-chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    transition: transform 0.2s ease;
+}
+
+details[open] .calculation-audit-chevron {
+    transform: rotate(90deg);
+}
+
+.header-learn-more {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 0.35rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.export-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
+    flex: 0 0 auto;
+}

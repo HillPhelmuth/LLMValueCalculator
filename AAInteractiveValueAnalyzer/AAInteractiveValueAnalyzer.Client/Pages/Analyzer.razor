@@ -1,0 +1,1077 @@
+<PageTitle>Model Value Analyzer</PageTitle>
+
+@{
+    var summary = RecommendationEngine.Analyze(Inputs);
+    var topRecommendations = GetRecommendationRows(summary).ToList();
+    var comparisonRows = GetComparisonRows(summary).ToList();
+}
+
+<main class="page-shell dense-analyzer">
+    @if (ActiveFieldHelp is not null)
+    {
+        <div class="modal-backdrop" @onclick="CloseFieldHelp">
+            <div class="data-modal help-modal" @onclick:stopPropagation="true">
+                <div class="data-modal-header">
+                    <div>
+                        <h2>@ActiveFieldHelp.Title</h2>
+                        <p>@ActiveFieldHelp.Description</p>
+                    </div>
+                    <button type="button" class="icon-button close-button" title="Close help" aria-label="Close help" @onclick="CloseFieldHelp">x</button>
+                </div>
+                <div class="data-modal-section">
+                    <h3>Effect on calculations</h3>
+                    <p>@ActiveFieldHelp.CalculationImpact</p>
+                </div>
+            </div>
+        </div>
+    }
+    else if (ActiveModalResult is not null)
+    {
+        <div class="modal-backdrop" @onclick="CloseAdditionalData">
+            <div class="data-modal" @onclick:stopPropagation="true">
+                <div class="data-modal-header">
+                    <div>
+                        <h2>@ActiveModalTitle</h2>
+                        <p>@ActiveModalResult.Model.DisplayName</p>
+                    </div>
+                    <button type="button" class="icon-button close-button" title="Close additional data" aria-label="Close additional data" @onclick="CloseAdditionalData">x</button>
+                </div>
+                <div class="data-modal-grid">
+                    @foreach (var metric in BuildAdditionalMetrics(ActiveModalResult))
+                    {
+                        <div class="modal-metric">
+                            <span>@metric.Key</span>
+                            <strong>@metric.Value</strong>
+                        </div>
+                    }
+                </div>
+                @if (!string.IsNullOrWhiteSpace(ActiveModalResult.Model.Notes))
+                {
+                    <div class="data-modal-section">
+                        <h3>Model notes</h3>
+                        <p>@ActiveModalResult.Model.Notes</p>
+                    </div>
+                }
+                <div class="data-modal-section">
+                    <h3>@(ActiveModalResult.IsEligible ? "Recommendation note" : "Exclusion reasons")</h3>
+                    @if (ActiveModalResult.IsEligible)
+                    {
+                        <p>@ActiveModalResult.RecommendationReason</p>
+                    }
+                    else
+                    {
+                        <ul>
+                            @foreach (var reason in ActiveModalResult.ExclusionReasons)
+                            {
+                                <li>@reason</li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    <section class="header-strip">
+        <div class="header-copy">
+            <h1>Interactive LLM EV Calculator and Model Selection Tool</h1>
+        </div>
+        <div class="header-aside">
+            <p class="header-summary">
+                Compare success, risk, and unit economics against <a href="https://www.artificialanalysis.ai" target="_blank" rel="noopener noreferrer">Artificial Analysis</a> cost and evaluation metrics for a specific workload to help guide your model selection.
+            </p>
+            <a class="header-learn-more" href="/intro-info">Learn more</a>
+        </div>
+    </section>
+
+    <section class="workspace-grid">
+        <section class="panel control-panel">
+            <div class="section-heading split compact-actions">
+                <div>
+                    <h2>Configuration</h2>
+                    <p>Compact workload, guardrail, and economic inputs for the current scenario.</p>
+                </div>
+                <button type="button" class="secondary-button" @onclick="ResetDefaults">Reset</button>
+            </div>
+
+            <div class="dense-form-grid four-up top-controls">
+                <label class="compact-field">
+                    <div class="field-label-row">
+                        <span>Use-case name</span>
+                        <button type="button" class="icon-button help-button" title="Explain use-case name" aria-label='@GetFieldHelpAriaLabel("use-case-name")' @onclick='() => ShowFieldHelp("use-case-name")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                    </div>
+                    <input type="text" @bind="Inputs.UseCaseName" />
+                </label>
+
+                <label class="compact-field">
+                    <div class="field-label-row">
+                        <span>Task category</span>
+                        <button type="button" class="icon-button help-button" title="Explain task category" aria-label='@GetFieldHelpAriaLabel("task-category")' @onclick='() => ShowFieldHelp("task-category")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                    </div>
+                    <select @bind="Inputs.TaskCategory">
+                        @foreach (var option in RecommendationEngine.TaskCategories)
+                        {
+                            <option value="@option">@option.DisplayName()</option>
+                        }
+                    </select>
+                </label>
+
+                <label class="compact-field">
+                    <div class="field-label-row">
+                        <span>Sensitivity</span>
+                        <button type="button" class="icon-button help-button" title="Explain sensitivity" aria-label='@GetFieldHelpAriaLabel("sensitivity")' @onclick='() => ShowFieldHelp("sensitivity")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                    </div>
+                    <select @bind="Inputs.DifficultySensitivity">
+                        @foreach (var option in RecommendationEngine.TauBySensitivity.Keys)
+                        {
+                            <option value="@option">@option.DisplayName()</option>
+                        }
+                    </select>
+                </label>
+            </div>
+
+            @if (HasPendingCategoryChange)
+            {
+                <div class="compact-callout">
+                    <div>
+                        <strong>@Inputs.TaskCategory.DisplayName() preset ready.</strong>
+                        <p>@CategoryPresetPrompt</p>
+                    </div>
+                    <div class="category-preset-actions">
+                        @if (ActiveTaskCategoryProfile.HasPresetDefaults)
+                        {
+                            <button type="button" class="primary-button" @onclick="ApplyCategoryDefaults">Apply defaults</button>
+                        }
+                        <button type="button" class="secondary-button" @onclick="KeepCurrentInputs">Keep current</button>
+                    </div>
+                </div>
+            }
+
+            @if (ActiveCategoryPresetDetails.Count > 0)
+            {
+                <div class="dense-section">
+                    <div class="section-heading compact-heading">
+                        <div>
+                            <h3>Category preset</h3>
+                            <p>@ActiveCategoryPresetSummary</p>
+                        </div>
+                    </div>
+                    <div class="preset-grid">
+                        @foreach (var detail in ActiveCategoryPresetDetails)
+                        {
+                            <div class="preset-item">
+                                <span>@detail.Key</span>
+                                <strong>@detail.Value</strong>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div class="dense-section">
+                <div class="section-heading compact-heading">
+                    <div>
+                        <h3>Workload</h3>
+                        <p>Shape the task, context, reasoning burden, and output requirements.</p>
+                    </div>
+                </div>
+                <div class="dense-form-grid three-up">
+                    <label class="compact-field">
+                        <div class="field-label-row">
+                            <span>Context</span>
+                            <button type="button" class="icon-button help-button" title="Explain context" aria-label='@GetFieldHelpAriaLabel("context")' @onclick='() => ShowFieldHelp("context")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                        </div>
+                        <select @bind="Inputs.ContextRequirement">
+                            @foreach (var option in RecommendationEngine.ContextAdjustments.Keys)
+                            {
+                                <option value="@option">@option.DisplayName()</option>
+                            }
+                        </select>
+                    </label>
+
+                    <label class="compact-field">
+                        <div class="field-label-row">
+                            <span>Reasoning</span>
+                            <button type="button" class="icon-button help-button" title="Explain reasoning" aria-label='@GetFieldHelpAriaLabel("reasoning")' @onclick='() => ShowFieldHelp("reasoning")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                        </div>
+                        <select @bind="Inputs.ReasoningDepth">
+                            @foreach (var option in RecommendationEngine.ReasoningAdjustments.Keys)
+                            {
+                                <option value="@option">@option.DisplayName()</option>
+                            }
+                        </select>
+                    </label>
+
+                    <label class="compact-field">
+                        <div class="field-label-row">
+                            <span>Domain</span>
+                            <button type="button" class="icon-button help-button" title="Explain domain specificity" aria-label='@GetFieldHelpAriaLabel("domain")' @onclick='() => ShowFieldHelp("domain")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                        </div>
+                        <select @bind="Inputs.DomainSpecificity">
+                            @foreach (var option in RecommendationEngine.DomainAdjustments.Keys)
+                            {
+                                <option value="@option">@option.DisplayName()</option>
+                            }
+                        </select>
+                    </label>
+
+                    <label class="compact-field">
+                        <div class="field-label-row">
+                            <span>Tool use</span>
+                            <button type="button" class="icon-button help-button" title="Explain tool use" aria-label='@GetFieldHelpAriaLabel("tool-use")' @onclick='() => ShowFieldHelp("tool-use")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                        </div>
+                        <select @bind="Inputs.ToolUse">
+                            @foreach (var option in RecommendationEngine.ToolAdjustments.Keys)
+                            {
+                                <option value="@option">@option.DisplayName()</option>
+                            }
+                        </select>
+                    </label>
+
+                    <label class="compact-field">
+                        <div class="field-label-row">
+                            <span>Verifiability</span>
+                            <button type="button" class="icon-button help-button" title="Explain verifiability" aria-label='@GetFieldHelpAriaLabel("verifiability")' @onclick='() => ShowFieldHelp("verifiability")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                        </div>
+                        <select @bind="Inputs.Verifiability">
+                            @foreach (var option in RecommendationEngine.VerifiabilityAdjustments.Keys)
+                            {
+                                <option value="@option">@option.DisplayName()</option>
+                            }
+                        </select>
+                    </label>
+
+                    <label class="compact-field">
+                        <div class="field-label-row">
+                            <span>Output</span>
+                            <button type="button" class="icon-button help-button" title="Explain output constraint" aria-label='@GetFieldHelpAriaLabel("output")' @onclick='() => ShowFieldHelp("output")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                        </div>
+                        <select @bind="Inputs.OutputConstraint">
+                            @foreach (var option in RecommendationEngine.OutputAdjustments.Keys)
+                            {
+                                <option value="@option">@option.DisplayName()</option>
+                            }
+                        </select>
+                    </label>
+
+                    <label class="compact-field">
+                        <div class="field-label-row">
+                            <span>Eval set size</span>
+                            <button type="button" class="icon-button help-button" title="Explain eval set size" aria-label='@GetFieldHelpAriaLabel("eval-set-size")' @onclick='() => ShowFieldHelp("eval-set-size")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                        </div>
+                        <input type="number" min="0" step="10" @bind="Inputs.EvalSetSize" disabled="@(!Inputs.HasRepresentativeEvalSet)" />
+                    </label>
+
+                    <label class="compact-field">
+                        <div class="field-label-row">
+                            <span>Max attempts</span>
+                            <button type="button" class="icon-button help-button" title="Explain max attempts" aria-label='@GetFieldHelpAriaLabel("max-attempts")' @onclick='() => ShowFieldHelp("max-attempts")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                        </div>
+                        <select @bind="Inputs.MaxAttempts" disabled="@(!Inputs.RetriesAllowed)">
+                            @foreach (var attempts in AttemptOptions)
+                            {
+                                <option value="@attempts">@attempts</option>
+                            }
+                        </select>
+                    </label>
+
+                    <div class="compact-range">
+                        <div class="range-label inline-label">
+                            <div class="field-label-row">
+                                <span>Base difficulty</span>
+                                <button type="button" class="icon-button help-button" title="Explain base difficulty" aria-label='@GetFieldHelpAriaLabel("base-difficulty")' @onclick='() => ShowFieldHelp("base-difficulty")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                            </div>
+                            <strong>@Inputs.BaseDifficulty.ToString("0.0")</strong>
+                        </div>
+                        <input type="range" min="0" max="60" step="0.5" @bind="Inputs.BaseDifficulty" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="dense-section">
+                <div class="section-heading compact-heading">
+                    <div>
+                        <h3>Guardrails</h3>
+                        <p>These change difficulty, critical-failure exposure, or trust in the estimate.</p>
+                    </div>
+                </div>
+                <div class="toggle-grid">
+                    <label><input type="checkbox" @bind="Inputs.HasRepresentativeEvalSet" /> <span class="toggle-label-text">Representative eval set</span><button type="button" class="icon-button help-button" title="Explain representative eval set" aria-label='@GetFieldHelpAriaLabel("representative-eval-set")' @onclick='() => ShowFieldHelp("representative-eval-set")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button></label>
+                    <label><input type="checkbox" @bind="Inputs.HasDeterministicValidation" /> <span class="toggle-label-text">Deterministic validation</span><button type="button" class="icon-button help-button" title="Explain deterministic validation" aria-label='@GetFieldHelpAriaLabel("deterministic-validation")' @onclick='() => ShowFieldHelp("deterministic-validation")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button></label>
+                    <label><input type="checkbox" @bind="Inputs.HasRagOrDomainContext" /> <span class="toggle-label-text">RAG / domain context</span><button type="button" class="icon-button help-button" title="Explain RAG or domain context" aria-label='@GetFieldHelpAriaLabel("rag-domain-context")' @onclick='() => ShowFieldHelp("rag-domain-context")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button></label>
+                    <label><input type="checkbox" @bind="Inputs.RequiresStrictStructuredOutput" /> <span class="toggle-label-text">Strict structure</span><button type="button" class="icon-button help-button" title="Explain strict structure" aria-label='@GetFieldHelpAriaLabel("strict-structure")' @onclick='() => ShowFieldHelp("strict-structure")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button></label>
+                    <label><input type="checkbox" @bind="Inputs.HasSilentFailureRisk" /> <span class="toggle-label-text">Silent failure risk</span><button type="button" class="icon-button help-button" title="Explain silent failure risk" aria-label='@GetFieldHelpAriaLabel("silent-failure-risk")' @onclick='() => ShowFieldHelp("silent-failure-risk")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button></label>
+                    <label><input type="checkbox" @bind="Inputs.CustomerFacing" /> <span class="toggle-label-text">Customer-facing</span><button type="button" class="icon-button help-button" title="Explain customer-facing" aria-label='@GetFieldHelpAriaLabel("customer-facing")' @onclick='() => ShowFieldHelp("customer-facing")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button></label>
+                    <label><input type="checkbox" @bind="Inputs.HumanApprovalForHighRiskActions" /> <span class="toggle-label-text">Human approval</span><button type="button" class="icon-button help-button" title="Explain human approval" aria-label='@GetFieldHelpAriaLabel("human-approval")' @onclick='() => ShowFieldHelp("human-approval")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button></label>
+                    <label><input type="checkbox" @bind="Inputs.RetriesAllowed" /> <span class="toggle-label-text">Retries allowed</span><button type="button" class="icon-button help-button" title="Explain retries allowed" aria-label='@GetFieldHelpAriaLabel("retries-allowed")' @onclick='() => ShowFieldHelp("retries-allowed")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button></label>
+                </div>
+            </div>
+
+            <div class="dense-section">
+                <div class="section-heading compact-heading">
+                    <div>
+                        <h3>Economics and risk</h3>
+                        <p>Set the acceptance bar and the cost model used for ranking.</p>
+                    </div>
+                </div>
+                <div class="range-cluster">
+                    <div class="compact-range">
+                        <div class="range-label inline-label">
+                            <div class="field-label-row">
+                                <span>Required success</span>
+                                <button type="button" class="icon-button help-button" title="Explain required success" aria-label='@GetFieldHelpAriaLabel("required-success")' @onclick='() => ShowFieldHelp("required-success")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                            </div>
+                            <strong>@Inputs.RequiredSuccessRate.ToString("0.0")%</strong>
+                        </div>
+                        <input type="range" min="50" max="99.9" step="0.1" @bind="Inputs.RequiredSuccessRate" />
+                    </div>
+
+                    <div class="compact-range">
+                        <div class="range-label inline-label">
+                            <div class="field-label-row">
+                                <span>Allowed crit. fail</span>
+                                <button type="button" class="icon-button help-button" title="Explain allowed critical failure" aria-label='@GetFieldHelpAriaLabel("allowed-critical-failure")' @onclick='() => ShowFieldHelp("allowed-critical-failure")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                            </div>
+                            <strong>@Inputs.AllowedCriticalFailureRate.ToString("0.00")%</strong>
+                        </div>
+                        <input type="range" min="0" max="20" step="0.1" @bind="Inputs.AllowedCriticalFailureRate" />
+                    </div>
+
+                    <div class="compact-range">
+                        <div class="range-label inline-label">
+                            <div class="field-label-row">
+                                <span>Critical share of failures</span>
+                                <button type="button" class="icon-button help-button" title="Explain critical share of failures" aria-label='@GetFieldHelpAriaLabel("critical-share")' @onclick='() => ShowFieldHelp("critical-share")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                            </div>
+                            <strong>@Inputs.CriticalFailureShareOfFailures.ToString("0")%</strong>
+                        </div>
+                        <input type="range" min="0" max="100" step="1" @bind="Inputs.CriticalFailureShareOfFailures" />
+                    </div>
+
+                    <div class="compact-range">
+                        <div class="range-label inline-label">
+                            <div class="field-label-row">
+                                <span>AA task multiplier</span>
+                                <button type="button" class="icon-button help-button" title="Explain AA task multiplier" aria-label='@GetFieldHelpAriaLabel("aa-task-multiplier")' @onclick='() => ShowFieldHelp("aa-task-multiplier")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                            </div>
+                            <strong>@Inputs.CostMultiplier.ToString("0.0")x</strong>
+                        </div>
+                        <input type="range" min="0.1" max="10" step="0.1" @bind="Inputs.CostMultiplier" />
+                    </div>
+                </div>
+
+                <div class="dense-form-grid three-up">
+                    <label class="compact-field">
+                        <div class="field-label-row">
+                            <span>$ per success</span>
+                            <button type="button" class="icon-button help-button" title="Explain value per success" aria-label='@GetFieldHelpAriaLabel("value-per-success")' @onclick='() => ShowFieldHelp("value-per-success")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                        </div>
+                        <input type="number" min="0" step="0.25" @bind="Inputs.BusinessValuePerSuccessUsd" />
+                    </label>
+
+                    <label class="compact-field">
+                        <div class="field-label-row">
+                            <span>Failure cost $</span>
+                            <button type="button" class="icon-button help-button" title="Explain failure cost" aria-label='@GetFieldHelpAriaLabel("failure-cost")' @onclick='() => ShowFieldHelp("failure-cost")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                        </div>
+                        <input type="number" min="0" step="0.25" @bind="Inputs.FailureCostUsd" />
+                    </label>
+
+                    <label class="compact-field">
+                        <div class="field-label-row">
+                            <span>Review cost/task</span>
+                            <button type="button" class="icon-button help-button" title="Explain review cost" aria-label='@GetFieldHelpAriaLabel("review-cost")' @onclick='() => ShowFieldHelp("review-cost")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                        </div>
+                        <input type="number" min="0" step="0.05" @bind="Inputs.HumanReviewCostUsd" />
+                    </label>
+
+                    <label class="compact-field">
+                        <div class="field-label-row">
+                            <span>Retry overhead</span>
+                            <button type="button" class="icon-button help-button" title="Explain retry overhead" aria-label='@GetFieldHelpAriaLabel("retry-overhead")' @onclick='() => ShowFieldHelp("retry-overhead")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                        </div>
+                        <input type="number" min="0" step="0.05" @bind="Inputs.OperationalRetryCostUsd" />
+                    </label>
+
+                    <label class="compact-field">
+                        <div class="field-label-row">
+                            <span>Monthly volume (1k)</span>
+                            <button type="button" class="icon-button help-button" title="Explain monthly volume" aria-label='@GetFieldHelpAriaLabel("monthly-volume")' @onclick='() => ShowFieldHelp("monthly-volume")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                        </div>
+                        <input type="number" min="0" step="1" @bind="Inputs.MonthlyVolume" />
+                    </label>
+                </div>
+            </div>
+
+            <div class="dense-section decision-rule-inline">
+                <strong>Decision rule</strong>
+                <p>Eligible models must clear both hard constraints. Ranking uses <code>EV/1k = 1000 * (businessValue * p - directCost - failureCost * (1 - p))</code>.</p>
+            </div>
+        </section>
+
+        <div class="results-column">
+            <section class="panel recommendations-panel">
+                <div class="section-heading split compact-heading">
+                    <div>
+                        <h2>Recommendations for @Inputs.UseCaseName</h2>
+                        <p>@RecommendationSummaryText(summary)</p>
+                    </div>
+                    <div class="table-tools">
+                        <div class="table-filter-group">
+                            <input type="search"
+                                   class="table-filter-input"
+                                   placeholder="Filter model or rationale"
+                                   aria-label="Filter recommendations"
+                                   @bind="RecommendationFilterText"
+                                   @bind:event="oninput" />
+                            <span class="filter-count">@topRecommendations.Count shown</span>
+                        </div>
+                        <details class="column-picker">
+                            <summary>Columns</summary>
+                            <div class="column-picker-menu">
+                                @foreach (var column in RecommendationColumns)
+                                {
+                                    var recommendationColumnKey = column.Key;
+                                    <label>
+                                        <input type="checkbox"
+                                               checked="@IsColumnVisible(VisibleRecommendationColumns, recommendationColumnKey)"
+                                               disabled="@(!CanHideColumn(VisibleRecommendationColumns, recommendationColumnKey))"
+                                               @onchange="args => ToggleColumn(VisibleRecommendationColumns, recommendationColumnKey, args.Value as bool? == true)" />
+                                        @column.Label
+                                    </label>
+                                }
+                            </div>
+                        </details>
+                        <div class="status-pill @(summary.EligibleResults.Count > 0 ? "ok" : "warn")">
+                            @(summary.EligibleResults.Count > 0 ? "Recommendations available" : "No model meets constraints")
+                        </div>
+                    </div>
+                </div>
+
+                @if (summary.EligibleResults.Count == 0)
+                {
+                    <div class="empty-state dense-empty-state">
+                        <h3>No eligible model</h3>
+                        <p>Lower the target threshold, reduce difficulty, improve validation, or add grounding before choosing from the current catalog.</p>
+                    </div>
+                }
+                else if (topRecommendations.Count == 0)
+                {
+                    <div class="empty-state dense-empty-state">
+                        <h3>No recommendations match the current filter</h3>
+                        <p>Clear or broaden the recommendation filter to restore eligible rows.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="table-wrap dense-table-wrap">
+                        <table class="dense-table recommendation-table">
+                            <thead>
+                                <tr>
+                                    <th>
+                                        <button type="button"
+                                                class="sort-header-button @(RecommendationSort.ColumnKey == "model" ? "active" : null)"
+                                                aria-label="Sort recommendations by model"
+                                                @onclick='() => ToggleSort(true, "model")'>
+                                            <span>Model</span>
+                                            <span class="sort-indicator">@GetSortIndicator(RecommendationSort, "model")</span>
+                                        </button>
+                                    </th>
+                                    @if (IsColumnVisible(VisibleRecommendationColumns, "why"))
+                                    {
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button @(RecommendationSort.ColumnKey == "why" ? "active" : null)"
+                                                    aria-label="Sort recommendations by rationale"
+                                                    @onclick='() => ToggleSort(true, "why")'>
+                                                <span>Why</span>
+                                                <span class="sort-indicator">@GetSortIndicator(RecommendationSort, "why")</span>
+                                            </button>
+                                        </th>
+                                    }
+                                    @if (IsColumnVisible(VisibleRecommendationColumns, "success"))
+                                    {
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(RecommendationSort.ColumnKey == "success" ? "active" : null)"
+                                                    aria-label="Sort recommendations by success"
+                                                    @onclick='() => ToggleSort(true, "success")'>
+                                                <span>Success</span>
+                                                <span class="sort-indicator">@GetSortIndicator(RecommendationSort, "success")</span>
+                                            </button>
+                                        </th>
+                                    }
+                                    @if (IsColumnVisible(VisibleRecommendationColumns, "single"))
+                                    {
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(RecommendationSort.ColumnKey == "single" ? "active" : null)"
+                                                    aria-label="Sort recommendations by single-attempt success"
+                                                    @onclick='() => ToggleSort(true, "single")'>
+                                                <span>1-attempt</span>
+                                                <span class="sort-indicator">@GetSortIndicator(RecommendationSort, "single")</span>
+                                            </button>
+                                        </th>
+                                    }
+                                    @if (IsColumnVisible(VisibleRecommendationColumns, "critical"))
+                                    {
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(RecommendationSort.ColumnKey == "critical" ? "active" : null)"
+                                                    aria-label="Sort recommendations by critical failure rate"
+                                                    @onclick='() => ToggleSort(true, "critical")'>
+                                                <span>Crit. fail</span>
+                                                <span class="sort-indicator">@GetSortIndicator(RecommendationSort, "critical")</span>
+                                            </button>
+                                        </th>
+                                    }
+                                    @if (IsColumnVisible(VisibleRecommendationColumns, "attempts"))
+                                    {
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(RecommendationSort.ColumnKey == "attempts" ? "active" : null)"
+                                                    aria-label="Sort recommendations by expected tries"
+                                                    @onclick='() => ToggleSort(true, "attempts")'>
+                                                <span>Exp. tries</span>
+                                                <span class="sort-indicator">@GetSortIndicator(RecommendationSort, "attempts")</span>
+                                            </button>
+                                        </th>
+                                    }
+                                    @if (IsColumnVisible(VisibleRecommendationColumns, "direct"))
+                                    {
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(RecommendationSort.ColumnKey == "direct" ? "active" : null)"
+                                                    aria-label="Sort recommendations by direct cost per 1000 tasks"
+                                                    @onclick='() => ToggleSort(true, "direct")'>
+                                                <span>Direct/1k</span>
+                                                <span class="sort-indicator">@GetSortIndicator(RecommendationSort, "direct")</span>
+                                            </button>
+                                        </th>
+                                    }
+                                    @if (IsColumnVisible(VisibleRecommendationColumns, "costsuccess"))
+                                    {
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(RecommendationSort.ColumnKey == "costsuccess" ? "active" : null)"
+                                                    aria-label="Sort recommendations by cost per 1000 successful tasks"
+                                                    @onclick='() => ToggleSort(true, "costsuccess")'>
+                                                <span>Cost/1k success</span>
+                                                <span class="sort-indicator">@GetSortIndicator(RecommendationSort, "costsuccess")</span>
+                                            </button>
+                                        </th>
+                                    }
+                                    @if (IsColumnVisible(VisibleRecommendationColumns, "successdollar"))
+                                    {
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(RecommendationSort.ColumnKey == "successdollar" ? "active" : null)"
+                                                    aria-label="Sort recommendations by success per dollar"
+                                                    @onclick='() => ToggleSort(true, "successdollar")'>
+                                                <span>Success/$</span>
+                                                <span class="sort-indicator">@GetSortIndicator(RecommendationSort, "successdollar")</span>
+                                            </button>
+                                        </th>
+                                    }
+                                    @if (IsColumnVisible(VisibleRecommendationColumns, "ev"))
+                                    {
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(RecommendationSort.ColumnKey == "ev" ? "active" : null)"
+                                                    aria-label="Sort recommendations by expected value per 1000 tasks"
+                                                    @onclick='() => ToggleSort(true, "ev")'>
+                                                <span>EV/1k</span>
+                                                <span class="sort-indicator">@GetSortIndicator(RecommendationSort, "ev")</span>
+                                            </button>
+                                        </th>
+                                    }
+                                    @if (IsColumnVisible(VisibleRecommendationColumns, "monthly"))
+                                    {
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(RecommendationSort.ColumnKey == "monthly" ? "active" : null)"
+                                                    aria-label="Sort recommendations by monthly expected value"
+                                                    @onclick='() => ToggleSort(true, "monthly")'>
+                                                <span>Monthly EV</span>
+                                                <span class="sort-indicator">@GetSortIndicator(RecommendationSort, "monthly")</span>
+                                            </button>
+                                        </th>
+                                    }
+                                    <th class="num">More</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in topRecommendations.Select((result, index) => new { result, index }))
+                                {
+                                    var recommendationTags = GetRecommendationTags(summary, item.result);
+                                    <tr @key="item.result.Model.DisplayName">
+                                        <td>
+                                            <div class="model-cell">
+                                                <strong>@(item.index + 1). @item.result.Model.DisplayName</strong>
+                                                <div class="pill-row">
+                                                    @foreach (var tag in recommendationTags)
+                                                    {
+                                                        <span class="mini-pill">@tag</span>
+                                                    }
+                                                </div>
+                                                @if (!string.IsNullOrWhiteSpace(item.result.Model.Notes))
+                                                {
+                                                    <small>@item.result.Model.Notes</small>
+                                                }
+                                            </div>
+                                        </td>
+                                        @if (IsColumnVisible(VisibleRecommendationColumns, "why"))
+                                        {
+                                            <td class="wrap-cell">@item.result.RecommendationReason</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleRecommendationColumns, "success"))
+                                        {
+                                            <td class="num">@Percent(item.result.EffectiveSuccessRate)</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleRecommendationColumns, "single"))
+                                        {
+                                            <td class="num">@Percent(item.result.SingleAttemptSuccessRate)</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleRecommendationColumns, "critical"))
+                                        {
+                                            <td class="num">@Percent(item.result.CriticalFailureRate, 2)</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleRecommendationColumns, "attempts"))
+                                        {
+                                            <td class="num">@Number(item.result.ExpectedAttempts, "0.00")</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleRecommendationColumns, "direct"))
+                                        {
+                                            <td class="num">@Currency(item.result.ExpectedTotalDirectCostUsd)</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleRecommendationColumns, "costsuccess"))
+                                        {
+                                            <td class="num">@Currency(item.result.CostPerSuccessfulTaskUsd)</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleRecommendationColumns, "successdollar"))
+                                        {
+                                            <td class="num">@Number(item.result.SuccessPerDollar, "0.00")</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleRecommendationColumns, "ev"))
+                                        {
+                                            <td class="num @(item.result.ExpectedValuePerTaskUsd >= 0 ? "positive" : "negative")">@Currency(item.result.ExpectedValuePerTaskUsd)</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleRecommendationColumns, "monthly"))
+                                        {
+                                            <td class="num @(item.result.MonthlyExpectedValueUsd >= 0 ? "positive" : "negative")">@Currency(item.result.MonthlyExpectedValueUsd)</td>
+                                        }
+                                        <td class="num action-cell">
+                                            <button type="button"
+                                                    class="icon-button"
+                                                    title="Additional data"
+                                                    aria-label="Show additional data for @item.result.Model.DisplayName"
+                                                    @onclick="() => ShowRecommendationData(item.result)">i</button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+
+            <section class="panel audit-panel">
+                <details>
+                    <summary class="calculation-audit-summary" title="View calculation audit details">
+                        <span class="calculation-audit-chevron" aria-hidden="true">
+                            <svg viewBox="0 0 16 16" width="16" height="16" focusable="false">
+                                <path d="M5 3.5L10.5 8L5 12.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                        </span>
+                        <div class="section-heading compact-heading">
+                            <div>
+                                <h2>Calculation audit</h2>
+                                <p>The model uses these difficulty adjustments and guardrail notes.</p>
+                            </div>
+                        </div>
+                    </summary>
+                    <div class="audit-grid">
+                        <div>
+                            <h3>Difficulty factors</h3>
+                            <ul class="factor-list">
+                                @foreach (var factor in summary.DifficultyFactors)
+                                {
+                                <li>@factor</li>
+                                }
+                            </ul>
+                        </div>
+                        <div>
+                            <h3>Guardrails</h3>
+                            <ul class="factor-list">
+                                @foreach (var factor in summary.GuardrailFactors)
+                                {
+                                <li>@factor</li>
+                                }
+                            </ul>
+                        </div>
+                    </div>
+                </details>
+            </section>
+
+            <section class="panel table-panel">
+                <div class="section-heading split compact-heading">
+                    <div>
+                        <h2>Full comparison</h2>
+                        <p>@ComparisonSummaryText(summary)</p>
+                    </div>
+                    <div class="table-tools">
+                        <div class="table-filter-group">
+                            <input type="search"
+                                   class="table-filter-input"
+                                   placeholder="Filter model, note, or reason"
+                                   aria-label="Filter comparison rows"
+                                   @bind="ComparisonFilterText"
+                                   @bind:event="oninput" />
+                            <select class="table-filter-select" aria-label="Filter comparison rows by eligibility" @bind="ComparisonFilter">
+                                <option value="@ComparisonEligibilityFilter.All">All statuses</option>
+                                <option value="@ComparisonEligibilityFilter.EligibleOnly">Eligible only</option>
+                                <option value="@ComparisonEligibilityFilter.ExcludedOnly">Excluded only</option>
+                            </select>
+                            <span class="filter-count">@comparisonRows.Count shown</span>
+                        </div>
+                        <button type="button"
+                                class="icon-button export-button"
+                                title="Download full comparison as CSV"
+                                aria-label="Download full comparison as CSV"
+                                @onclick="DownloadComparisonCsv">
+                            <svg viewBox="0 0 16 16" width="16" height="16" focusable="false" aria-hidden="true">
+                                <path d="M8 2.5v7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                                <path d="M5.25 7.75L8 10.5l2.75-2.75" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                <path d="M3 12.5h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                            </svg>
+                        </button>
+                        <details class="column-picker">
+                            <summary>Columns</summary>
+                            <div class="column-picker-menu">
+                                @foreach (var column in ComparisonColumns)
+                                {
+                                    var comparisonColumnKey = column.Key;
+                                    <label>
+                                        <input type="checkbox"
+                                               checked="@IsColumnVisible(VisibleComparisonColumns, comparisonColumnKey)"
+                                               disabled="@(!CanHideColumn(VisibleComparisonColumns, comparisonColumnKey))"
+                                               @onchange="args => ToggleColumn(VisibleComparisonColumns, comparisonColumnKey, args.Value as bool? == true)" />
+                                        @column.Label
+                                    </label>
+                                }
+                            </div>
+                        </details>
+                    </div>
+                </div>
+
+                @if (comparisonRows.Count == 0)
+                {
+                    <div class="empty-state dense-empty-state">
+                        <h3>No comparison rows match the current filters</h3>
+                        <p>Clear the text filter or widen the status filter to show models again.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="table-wrap dense-table-wrap">
+                        <table class="dense-table comparison-table">
+                            <thead>
+                                <tr>
+                                <th>
+                                    <button type="button"
+                                            class="sort-header-button @(ComparisonSort.ColumnKey == "model" ? "active" : null)"
+                                            aria-label="Sort comparison table by model"
+                                            @onclick='() => ToggleSort(false, "model")'>
+                                        <span>Model</span>
+                                        <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "model")</span>
+                                    </button>
+                                </th>
+                                @if (IsColumnVisible(VisibleComparisonColumns, "intel"))
+                                {
+                                    <th>
+                                        <button type="button"
+                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "intel" ? "active" : null)"
+                                                aria-label="Sort comparison table by adjusted intelligence"
+                                                @onclick='() => ToggleSort(false, "intel")'>
+                                            <span>Adj IQ</span>
+                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "intel")</span>
+                                        </button>
+                                    </th>
+                                }
+                                @if (IsColumnVisible(VisibleComparisonColumns, "aacost"))
+                                {
+                                    <th>
+                                        <button type="button"
+                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "aacost" ? "active" : null)"
+                                                aria-label="Sort comparison table by AA cost per 1000 tasks"
+                                                @onclick='() => ToggleSort(false, "aacost")'>
+                                            <span>AA/1k</span>
+                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "aacost")</span>
+                                        </button>
+                                    </th>
+                                }
+                                @if (IsColumnVisible(VisibleComparisonColumns, "success"))
+                                {
+                                    <th>
+                                        <button type="button"
+                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "success" ? "active" : null)"
+                                                aria-label="Sort comparison table by success"
+                                                @onclick='() => ToggleSort(false, "success")'>
+                                            <span>Success</span>
+                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "success")</span>
+                                        </button>
+                                    </th>
+                                }
+                                @if (IsColumnVisible(VisibleComparisonColumns, "single"))
+                                {
+                                    <th>
+                                        <button type="button"
+                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "single" ? "active" : null)"
+                                                aria-label="Sort comparison table by single-attempt success"
+                                                @onclick='() => ToggleSort(false, "single")'>
+                                            <span>1-attempt</span>
+                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "single")</span>
+                                        </button>
+                                    </th>
+                                }
+                                @if (IsColumnVisible(VisibleComparisonColumns, "critical"))
+                                {
+                                    <th>
+                                        <button type="button"
+                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "critical" ? "active" : null)"
+                                                aria-label="Sort comparison table by critical failure"
+                                                @onclick='() => ToggleSort(false, "critical")'>
+                                            <span>Crit. fail</span>
+                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "critical")</span>
+                                        </button>
+                                    </th>
+                                }
+                                @if (IsColumnVisible(VisibleComparisonColumns, "attempts"))
+                                {
+                                    <th>
+                                        <button type="button"
+                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "attempts" ? "active" : null)"
+                                                aria-label="Sort comparison table by expected tries"
+                                                @onclick='() => ToggleSort(false, "attempts")'>
+                                            <span>Exp. tries</span>
+                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "attempts")</span>
+                                        </button>
+                                    </th>
+                                }
+                                @if (IsColumnVisible(VisibleComparisonColumns, "modelcost"))
+                                {
+                                    <th>
+                                        <button type="button"
+                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "modelcost" ? "active" : null)"
+                                                aria-label="Sort comparison table by model cost per 1000 tasks"
+                                                @onclick='() => ToggleSort(false, "modelcost")'>
+                                            <span>Model/1k</span>
+                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "modelcost")</span>
+                                        </button>
+                                    </th>
+                                }
+                                @if (IsColumnVisible(VisibleComparisonColumns, "review"))
+                                {
+                                    <th>
+                                        <button type="button"
+                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "review" ? "active" : null)"
+                                                aria-label="Sort comparison table by review cost per 1000 tasks"
+                                                @onclick='() => ToggleSort(false, "review")'>
+                                            <span>Review/1k</span>
+                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "review")</span>
+                                        </button>
+                                    </th>
+                                }
+                                @if (IsColumnVisible(VisibleComparisonColumns, "retry"))
+                                {
+                                    <th>
+                                        <button type="button"
+                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "retry" ? "active" : null)"
+                                                aria-label="Sort comparison table by retry overhead per 1000 tasks"
+                                                @onclick='() => ToggleSort(false, "retry")'>
+                                            <span>Retry/1k</span>
+                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "retry")</span>
+                                        </button>
+                                    </th>
+                                }
+                                @if (IsColumnVisible(VisibleComparisonColumns, "direct"))
+                                {
+                                    <th>
+                                        <button type="button"
+                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "direct" ? "active" : null)"
+                                                aria-label="Sort comparison table by direct cost per 1000 tasks"
+                                                @onclick='() => ToggleSort(false, "direct")'>
+                                            <span>Direct/1k</span>
+                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "direct")</span>
+                                        </button>
+                                    </th>
+                                }
+                                @if (IsColumnVisible(VisibleComparisonColumns, "costsuccess"))
+                                {
+                                    <th>
+                                        <button type="button"
+                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "costsuccess" ? "active" : null)"
+                                                aria-label="Sort comparison table by cost per 1000 successful tasks"
+                                                @onclick='() => ToggleSort(false, "costsuccess")'>
+                                            <span>Cost/1k success</span>
+                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "costsuccess")</span>
+                                        </button>
+                                    </th>
+                                }
+                                @if (IsColumnVisible(VisibleComparisonColumns, "successdollar"))
+                                {
+                                    <th>
+                                        <button type="button"
+                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "successdollar" ? "active" : null)"
+                                                aria-label="Sort comparison table by success per dollar"
+                                                @onclick='() => ToggleSort(false, "successdollar")'>
+                                            <span>Success/$</span>
+                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "successdollar")</span>
+                                        </button>
+                                    </th>
+                                }
+                                @if (IsColumnVisible(VisibleComparisonColumns, "ev"))
+                                {
+                                    <th>
+                                        <button type="button"
+                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "ev" ? "active" : null)"
+                                                aria-label="Sort comparison table by expected value per 1000 tasks"
+                                                @onclick='() => ToggleSort(false, "ev")'>
+                                            <span>EV/1k</span>
+                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "ev")</span>
+                                        </button>
+                                    </th>
+                                }
+                                @if (IsColumnVisible(VisibleComparisonColumns, "monthly"))
+                                {
+                                    <th>
+                                        <button type="button"
+                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "monthly" ? "active" : null)"
+                                                aria-label="Sort comparison table by monthly expected value"
+                                                @onclick='() => ToggleSort(false, "monthly")'>
+                                            <span>Monthly EV</span>
+                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "monthly")</span>
+                                        </button>
+                                    </th>
+                                }
+                                @if (IsColumnVisible(VisibleComparisonColumns, "status"))
+                                {
+                                    <th>
+                                        <button type="button"
+                                                class="sort-header-button @(ComparisonSort.ColumnKey == "status" ? "active" : null)"
+                                                aria-label="Sort comparison table by status"
+                                                @onclick='() => ToggleSort(false, "status")'>
+                                            <span>Status</span>
+                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "status")</span>
+                                        </button>
+                                    </th>
+                                }
+                                <th class="num">More</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var item in comparisonRows)
+                            {
+                                <tr class="@(item.IsEligible ? "eligible" : "excluded")" @key="item.Model.DisplayName">
+                                    <td>
+                                        <strong>@item.Model.DisplayName</strong>
+                                        @* @if (!string.IsNullOrWhiteSpace(item.Model.Notes))
+                                        {
+                                            <small>@item.Model.Notes</small>
+                                        } *@
+                                    </td>
+                                    @if (IsColumnVisible(VisibleComparisonColumns, "intel"))
+                                    {
+                                        <td class="num">
+                                            <div>@item.Model.AdjustedIntelligence.ToString("0")</div>
+                                            <small>Raw @item.Model.IntelligenceIndex.ToString("0")</small>
+                                        </td>
+                                    }
+                                    @if (IsColumnVisible(VisibleComparisonColumns, "aacost"))
+                                    {
+                                        <td class="num">@BatchCurrency(item.Model.CostPerAaTaskUsd)</td>
+                                    }
+                                    @if (IsColumnVisible(VisibleComparisonColumns, "success"))
+                                    {
+                                        <td class="num">@Percent(item.EffectiveSuccessRate)</td>
+                                    }
+                                    @if (IsColumnVisible(VisibleComparisonColumns, "single"))
+                                    {
+                                        <td class="num">@Percent(item.SingleAttemptSuccessRate)</td>
+                                    }
+                                    @if (IsColumnVisible(VisibleComparisonColumns, "critical"))
+                                    {
+                                        <td class="num">@Percent(item.CriticalFailureRate, 2)</td>
+                                    }
+                                    @if (IsColumnVisible(VisibleComparisonColumns, "attempts"))
+                                    {
+                                        <td class="num">@Number(item.ExpectedAttempts, "0.00")</td>
+                                    }
+                                    @if (IsColumnVisible(VisibleComparisonColumns, "modelcost"))
+                                    {
+                                        <td class="num">@Currency(item.ExpectedModelCostUsd)</td>
+                                    }
+                                    @if (IsColumnVisible(VisibleComparisonColumns, "review"))
+                                    {
+                                        <td class="num">@Currency(item.ExpectedReviewCostUsd)</td>
+                                    }
+                                    @if (IsColumnVisible(VisibleComparisonColumns, "retry"))
+                                    {
+                                        <td class="num">@Currency(item.ExpectedRetryOverheadUsd)</td>
+                                    }
+                                    @if (IsColumnVisible(VisibleComparisonColumns, "direct"))
+                                    {
+                                        <td class="num">@Currency(item.ExpectedTotalDirectCostUsd)</td>
+                                    }
+                                    @if (IsColumnVisible(VisibleComparisonColumns, "costsuccess"))
+                                    {
+                                        <td class="num">@Currency(item.CostPerSuccessfulTaskUsd)</td>
+                                    }
+                                    @if (IsColumnVisible(VisibleComparisonColumns, "successdollar"))
+                                    {
+                                        <td class="num">@Number(item.SuccessPerDollar, "0.00")</td>
+                                    }
+                                    @if (IsColumnVisible(VisibleComparisonColumns, "ev"))
+                                    {
+                                        <td class="num @(item.ExpectedValuePerTaskUsd >= 0 ? "positive" : "negative")">@Currency(item.ExpectedValuePerTaskUsd)</td>
+                                    }
+                                    @if (IsColumnVisible(VisibleComparisonColumns, "monthly"))
+                                    {
+                                        <td class="num @(item.MonthlyExpectedValueUsd >= 0 ? "positive" : "negative")">@Currency(item.MonthlyExpectedValueUsd)</td>
+                                    }
+                                    @if (IsColumnVisible(VisibleComparisonColumns, "status"))
+                                    {
+                                        <td>
+                                            @if (item.IsEligible)
+                                            {
+                                                <span class="status-pill ok compact">Eligible</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="status-pill warn compact">Excluded</span>
+                                            }
+                                        </td>
+                                    }
+                                    <td class="num action-cell">
+                                        <button type="button"
+                                                class="icon-button"
+                                                title="Additional data"
+                                                aria-label="Show additional data for @item.Model.DisplayName"
+                                                @onclick="() => ShowComparisonData(item)">i</button>
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+
+            <section class="dense-footnote">
+                <p>
+                    Artificial Analysis intelligence and cost values are treated as priors. Production decisions should replace the estimated success curve with measured eval results and real token, retry, tool, latency, review, and failure costs.
+                </p>
+            </section>
+        </div>
+    </section>
+</main>

@@ -1,0 +1,110 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "AAInteractiveValueAnalyzer/1.0.0": {
+        "dependencies": {
+          "AAInteractiveValueAnalyzer.Client": "1.0.0",
+          "Microsoft.AspNetCore.Components.WebAssembly.Server": "10.0.9"
+        },
+        "runtime": {
+          "AAInteractiveValueAnalyzer.dll": {}
+        }
+      },
+      "Markdig/1.3.2": {
+        "runtime": {
+          "lib/net10.0/Markdig.dll": {
+            "assemblyVersion": "1.3.0.0",
+            "fileVersion": "1.3.2.0"
+          }
+        }
+      },
+      "Microsoft.AspNetCore.Components.WebAssembly/10.0.9": {
+        "dependencies": {
+          "Microsoft.JSInterop.WebAssembly": "10.0.9"
+        },
+        "runtime": {
+          "lib/net10.0/Microsoft.AspNetCore.Components.WebAssembly.dll": {
+            "assemblyVersion": "10.0.9.0",
+            "fileVersion": "10.0.926.27113"
+          }
+        }
+      },
+      "Microsoft.AspNetCore.Components.WebAssembly.Server/10.0.9": {
+        "dependencies": {
+          "Microsoft.AspNetCore.Components.WebAssembly": "10.0.9"
+        },
+        "runtime": {
+          "lib/net10.0/Microsoft.AspNetCore.Components.WebAssembly.Server.dll": {
+            "assemblyVersion": "10.0.9.0",
+            "fileVersion": "10.0.926.27113"
+          }
+        }
+      },
+      "Microsoft.JSInterop.WebAssembly/10.0.9": {
+        "runtime": {
+          "lib/net10.0/Microsoft.JSInterop.WebAssembly.dll": {
+            "assemblyVersion": "10.0.9.0",
+            "fileVersion": "10.0.926.27113"
+          }
+        }
+      },
+      "AAInteractiveValueAnalyzer.Client/1.0.0": {
+        "dependencies": {
+          "Markdig": "1.3.2",
+          "Microsoft.AspNetCore.Components.WebAssembly": "10.0.9"
+        },
+        "runtime": {
+          "AAInteractiveValueAnalyzer.Client.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "AAInteractiveValueAnalyzer/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Markdig/1.3.2": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-fZgOC/3CswUrndjDTac70aQpYdtxbW5+5bRumR7vzvI2HJbkmgKisB1c9oT+GA6v0jB/JDR9BLa9FiPzQmaK6A==",
+      "path": "markdig/1.3.2",
+      "hashPath": "markdig.1.3.2.nupkg.sha512"
+    },
+    "Microsoft.AspNetCore.Components.WebAssembly/10.0.9": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-tBv68AsZ3r6z2QdV2m3cSSKUCbvEscN8REpHxcUs22vlR6UjTz6IKdInKNREkJ/3G1AQrBKrRTdrfrHVffE8Iw==",
+      "path": "microsoft.aspnetcore.components.webassembly/10.0.9",
+      "hashPath": "microsoft.aspnetcore.components.webassembly.10.0.9.nupkg.sha512"
+    },
+    "Microsoft.AspNetCore.Components.WebAssembly.Server/10.0.9": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-ZTtYvBILwGxhIiXi1L03ETBBOgMmizStu7dO/YblK6rPTa27wpEgYKp5Z9bUfr+wsFvHIDWd/ZMGb9on41f6yw==",
+      "path": "microsoft.aspnetcore.components.webassembly.server/10.0.9",
+      "hashPath": "microsoft.aspnetcore.components.webassembly.server.10.0.9.nupkg.sha512"
+    },
+    "Microsoft.JSInterop.WebAssembly/10.0.9": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-4G0A7GuQrtCAes8PuJPTDUcy+lCrxHWjr8ZlkDOa4h8a2Txj1XdhbXKLnld2vMY5EyZNC5jZXxa1xTD/AOCUlw==",
+      "path": "microsoft.jsinterop.webassembly/10.0.9",
+      "hashPath": "microsoft.jsinterop.webassembly.10.0.9.nupkg.sha512"
+    },
+    "AAInteractiveValueAnalyzer.Client/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

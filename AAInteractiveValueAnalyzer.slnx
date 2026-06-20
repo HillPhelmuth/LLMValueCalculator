@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/AAInteractiveValueAnalyzer.Client.csproj" />
+  <Project Path="AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.csproj" />
+</Solution>
