@@ -29,7 +29,7 @@ public class ModelData
     public string? Slug { get; set; }
 
     [JsonPropertyName("release_date")]
-    public DateTimeOffset ReleaseDate { get; set; }
+    public string ReleaseDate { get; set; }
 
     [JsonPropertyName("model_creator")]
     public ModelCreator? ModelCreator { get; set; }
@@ -131,5 +131,5 @@ public class Pagination
 public class AllModelsResponse
 {
     [JsonPropertyName("models")]
-    public List<ModelData> Models { get;  } = [];
+    public List<ModelData> Models { get; set; } = [];
 }

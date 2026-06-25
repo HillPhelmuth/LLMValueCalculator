@@ -25,6 +25,8 @@ public enum TaskCategoryOption
 
     [Description("Research / analysis")]
     ResearchAnalysis,
+    [Description("Simple RAG")]
+    SimpleRag,
 
     [Description("Other")]
     Other
