@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AAInteractiveValueAnalyzer.Client.Pages;
 using AAInteractiveValueAnalyzer.Components;
 using AAInteractiveValueAnalyzer.Models;
@@ -49,7 +50,9 @@ app.MapGet("api/models", async () =>
         responseJson = await client.GetFromJsonAsync<ArtificialAnalysisResponse>($"https://artificialanalysis.ai/api/v2/language/models/free?page={i}");
         response.Models.AddRange(responseJson.Data!.Where(x => x.ArtificialAnalysisIntelligenceIndexCost is not null));
     }
-  
+    response.Models = response.Models.DistinctBy(x => x.Id).ToList();
+    var json = JsonSerializer.Serialize(response, new JsonSerializerOptions { WriteIndented = true });
+    File.WriteAllText($@"C:\Users\adamh\source\repos\AAInteractiveValueAnalyzer\AAInteractiveValueAnalyzer\ArtificialAnalysisModelsWithCostPerTask-{DateTime.Now:yyyyMMddHHmmss}.json", json);
     return Results.Ok(response);
 });
 app.Run();

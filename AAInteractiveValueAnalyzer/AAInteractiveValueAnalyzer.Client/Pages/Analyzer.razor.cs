@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using AAInteractiveValueAnalyzer.Client.Models;
@@ -32,6 +32,7 @@ public partial class Analyzer
         new("single", "1-attempt", false),
         new("critical", "Crit. fail", false),
         new("attempts", "Exp. tries", false),
+        new("latency", "Latency", false),
         new("costsuccess", "Cost/1k success", false),
         new("successdollar", "Success/$", false)
     ];
@@ -49,6 +50,10 @@ public partial class Analyzer
         new("modelcost", "Model/1k", false),
         new("review", "Review/1k", false),
         new("retry", "Retry/1k", false),
+        new("latency", "Latency", false),
+        new("latcost", "Latency/1k", false),
+        new("critfail", "Crit fail/1k", false),
+        new("benignfail", "Benign fail/1k", false),
         new("costsuccess", "Cost/1k success", false),
         new("successdollar", "Success/$", false),
         new("monthly", "Monthly EV", false)
@@ -67,6 +72,22 @@ public partial class Analyzer
 
     [Inject]
     private IJSRuntime JsRuntime { get; set; } = null!;
+    [Inject]
+    private HttpClient Client { get; set; } = null!;
+
+    private ModelCatalog ModelCatalog => new(Client);
+    private RecommendationEngine RecommendationEngine => new(ModelCatalog);
+    private AnalysisSummary Summary { get; set; }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        Summary = await RecommendationEngine.Analyze(Inputs);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Summary = await RecommendationEngine.Analyze(Inputs);
+        await base.OnInitializedAsync();
+    }
 
     private static readonly IReadOnlyDictionary<string, FieldHelp> FieldHelpContent = new Dictionary<string, FieldHelp>(StringComparer.Ordinal)
     {
@@ -171,9 +192,13 @@ public partial class Analyzer
             "Business value captured when one task succeeds.",
             "Raises expected value linearly with effective success."),
         ["failure-cost"] = new(
-            "Failure cost",
-            "Economic loss assigned to a failed task.",
-            "Reduces expected value in proportion to failure probability."),
+            "Critical failure cost",
+            "Economic loss assigned to a critical (genuinely harmful) failed task -- a wrong answer that reached a customer, an irreversible action, or a silent error that propagated. This is the expensive tail of failure.",
+            "Charged against expected value at the modeled critical-failure rate, which every guardrail (silent-failure risk, deterministic validation, human approval, agentic exposure) acts on. Also drives the worst-case failure cost metric."),
+        ["benign-failure-cost"] = new(
+            "Benign failure cost",
+            "Economic loss assigned to a non-critical failed task -- one that was caught and retried or otherwise thrown away cheaply. Defaults equal to critical failure cost; lower it to express that ordinary failures are inexpensive.",
+            "Charged against expected value at the remaining (non-critical) failure rate. When it equals critical failure cost, total failure cost is the old single-term model; lowering it rewards models whose failures are mostly benign."),
         ["review-cost"] = new(
             "Review cost",
             "Human review cost applied to each task.",
@@ -185,8 +210,29 @@ public partial class Analyzer
         ["monthly-volume"] = new(
             "Monthly volume",
             "Forecast number of 1,000-task batches run each month.",
-            "Multiplies expected value per 1,000 tasks into monthly expected value.")
+            "Multiplies expected value per 1,000 tasks into monthly expected value."),
+        ["latency-cost"] = new(
+            "Latency cost per second",
+            "The dollar value of one second of end-to-end wait per task. Set this for interactive or customer-facing work where a user is blocked while the model responds; leave it at 0 for batch work where nothing waits on any single task.",
+            "Multiplied by each model's expected end-to-end latency and expected attempts, then subtracted from expected value. A slower model loses more value, and a model that retries waits more than once. Models with no published latency data are excluded while this is above 0 rather than treated as instant."),
+        ["max-latency"] = new(
+            "Maximum latency",
+            "The longest acceptable end-to-end response time per task, in seconds. Leave blank for no limit.",
+            "Acts as a hard eligibility threshold, like required success: a model whose expected latency exceeds this is excluded. Models with no published latency data are excluded while a limit is set, rather than passing the gate by default.")
     };
+
+    // The engine stores "no latency ceiling" as PositiveInfinity, which does not round-trip through a
+    // number input. This proxy presents an empty box for "no limit" and treats 0 or blank the same
+    // way, so the UI never has to render or parse infinity.
+    private double? MaxLatencyInput
+    {
+        get => double.IsPositiveInfinity(Inputs.MaxAcceptableLatencySeconds)
+            ? null
+            : Inputs.MaxAcceptableLatencySeconds;
+        set => Inputs.MaxAcceptableLatencySeconds = value is null or <= 0
+            ? double.PositiveInfinity
+            : value.Value;
+    }
 
     private TaskCategoryProfile ActiveTaskCategoryProfile => RecommendationEngine.ResolveTaskCategoryProfile(Inputs.TaskCategory);
     private FieldHelp? ActiveFieldHelp =>
@@ -366,6 +412,10 @@ public partial class Analyzer
             "modelcost" => OrderBy(items, item => item.ExpectedModelCostUsd, sort.Descending),
             "review" => OrderBy(items, item => item.ExpectedReviewCostUsd, sort.Descending),
             "retry" => OrderBy(items, item => item.ExpectedRetryOverheadUsd, sort.Descending),
+            "latency" => OrderBy(items, item => item.Model.HasLatencyData ? item.ExpectedLatencySeconds : double.MaxValue, sort.Descending),
+            "latcost" => OrderBy(items, item => item.Model.HasLatencyData ? item.ExpectedLatencyCostUsd : double.MaxValue, sort.Descending),
+            "critfail" => OrderBy(items, item => item.ExpectedCriticalFailureCostUsd, sort.Descending),
+            "benignfail" => OrderBy(items, item => item.ExpectedBenignFailureCostUsd, sort.Descending),
             "direct" => OrderBy(items, item => item.ExpectedTotalDirectCostUsd, sort.Descending),
             "costsuccess" => OrderBy(items, item => item.CostPerSuccessfulTaskUsd, sort.Descending),
             "successdollar" => OrderBy(items, item => item.SuccessPerDollar, sort.Descending),
@@ -447,7 +497,7 @@ public partial class Analyzer
 
     private async Task DownloadComparisonCsv()
     {
-        var summary = RecommendationEngine.Analyze(Inputs);
+        var summary = await RecommendationEngine.Analyze(Inputs);
         var comparisonRows = GetComparisonRows(summary).ToList();
         if (comparisonRows.Count == 0)
         {
@@ -478,6 +528,20 @@ public partial class Analyzer
     {
         return value.HasValue
             ? Currency(value.Value * RecommendationEngine.TaskBatchSize)
+            : "n/a";
+    }
+
+    private static string LatencySeconds(RecommendationResult item)
+    {
+        return item.Model.HasLatencyData
+            ? $"{item.ExpectedLatencySeconds.ToString("0.0", CultureInfo.CurrentCulture)}s"
+            : "n/a";
+    }
+
+    private static string LatencyCost(RecommendationResult item)
+    {
+        return item.Model.HasLatencyData
+            ? Currency(item.ExpectedLatencyCostUsd)
             : "n/a";
     }
 
@@ -560,6 +624,10 @@ public partial class Analyzer
             "modelcost" => Currency(item.ExpectedModelCostUsd),
             "review" => Currency(item.ExpectedReviewCostUsd),
             "retry" => Currency(item.ExpectedRetryOverheadUsd),
+            "latency" => LatencySeconds(item),
+            "latcost" => LatencyCost(item),
+            "critfail" => item.Model.HasCostData ? Currency(item.ExpectedCriticalFailureCostUsd) : "n/a",
+            "benignfail" => item.Model.HasCostData ? Currency(item.ExpectedBenignFailureCostUsd) : "n/a",
             "direct" => Currency(item.ExpectedTotalDirectCostUsd),
             "costsuccess" => Currency(item.CostPerSuccessfulTaskUsd),
             "successdollar" => Number(item.SuccessPerDollar, "0.00"),
@@ -710,6 +778,11 @@ public partial class Analyzer
             new("Expected review cost / 1k tasks", Currency(item.ExpectedReviewCostUsd)),
             new("Expected retry overhead / 1k tasks", Currency(item.ExpectedRetryOverheadUsd)),
             new("Expected direct cost / 1k tasks", Currency(item.ExpectedTotalDirectCostUsd)),
+            new("Expected latency / task", LatencySeconds(item)),
+            new("Expected latency cost / 1k tasks", LatencyCost(item)),
+            new("Expected critical-failure cost / 1k tasks", item.Model.HasCostData ? Currency(item.ExpectedCriticalFailureCostUsd) : "n/a"),
+            new("Expected benign-failure cost / 1k tasks", item.Model.HasCostData ? Currency(item.ExpectedBenignFailureCostUsd) : "n/a"),
+            new("Worst-case (critical) failure cost / 1k tasks", item.Model.HasCostData ? Currency(item.WorstCaseFailureCostUsd) : "n/a"),
             new("Cost per 1k successful tasks", Currency(item.CostPerSuccessfulTaskUsd)),
             new("Success per dollar", Number(item.SuccessPerDollar, "0.00")),
             new("Expected value / 1k tasks", Currency(item.ExpectedValuePerTaskUsd)),

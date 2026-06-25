@@ -5,6 +5,7 @@ public sealed class RecommendationResult
     public ModelProfile Model { get; init; } = default!;
     public double EffectiveDifficulty { get; init; }
     public double Tau { get; init; }
+    public double AdjustedIntelligence { get; init; }
     public double SingleAttemptSuccessRate { get; init; }
     public double EffectiveSuccessRate { get; init; }
     public double CriticalFailureRate { get; init; }
@@ -17,6 +18,11 @@ public sealed class RecommendationResult
     public double CostPerSuccessfulTaskUsd { get; init; }
     public double ExpectedValuePerTaskUsd { get; init; }
     public double MonthlyExpectedValueUsd { get; init; }
+    public double ExpectedCriticalFailureCostUsd { get; init; }
+    public double ExpectedBenignFailureCostUsd { get; init; }
+    public double WorstCaseFailureCostUsd { get; init; }
+    public double ExpectedLatencySeconds { get; init; }
+    public double ExpectedLatencyCostUsd { get; init; }
     public double SuccessPerDollar { get; init; }
     public bool IsEligible { get; init; }
     public List<string> ExclusionReasons { get; init; } = [];

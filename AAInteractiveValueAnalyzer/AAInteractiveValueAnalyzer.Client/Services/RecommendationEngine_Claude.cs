@@ -14,7 +14,7 @@ namespace AAInteractiveValueAnalyzer.Client.Services;
 /// planning estimate. The constants most responsible for the shape of the output, and therefore
 /// the ones to fit first, are <see cref="IntelligenceCurve"/> and <see cref="TauBySensitivity"/>.
 /// </remarks>
-public class RecommendationEngine(ModelCatalog modelCatalog)
+public static class RecommendationEngine_Claude
 {
     /// <summary>
     /// The analysis is normalized around task batches of this size when estimating cost, value, and throughput.
@@ -269,7 +269,7 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
             [TaskCategoryOption.Extraction] = new(
                 Category: TaskCategoryOption.Extraction,
                 BaseDifficultyPercentResidual: -4,
-                DefaultBaseDifficulty: 4,
+                DefaultBaseDifficulty: 10,
                 DefaultContextRequirement: ContextRequirementOption.MediumMostlyRelevant,
                 DefaultReasoningDepth: ReasoningDepthOption.SingleStepTransformation,
                 DefaultToolUse: ToolUseOption.None,
@@ -280,23 +280,23 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
                 DefaultHasSilentFailureRisk: false,
                 DefaultRetriesAllowed: true,
                 DefaultMaxAttempts: 2),
-            [TaskCategoryOption.SimpleRag] = new(
-                Category: TaskCategoryOption.SimpleRag,
+            [TaskCategoryOption.ClassificationRouting] = new(
+                Category: TaskCategoryOption.ClassificationRouting,
                 BaseDifficultyPercentResidual: -4,
-                DefaultBaseDifficulty: 6,
+                DefaultBaseDifficulty: 12,
                 DefaultContextRequirement: ContextRequirementOption.ShortClean,
                 DefaultReasoningDepth: ReasoningDepthOption.Light,
                 DefaultToolUse: ToolUseOption.None,
                 DefaultVerifiability: VerifiabilityOption.DeterministicallyTestable,
-                DefaultOutputConstraint: OutputConstraintOption.FreeText,
+                DefaultOutputConstraint: OutputConstraintOption.StructuredJsonOrSchema,
                 DefaultHasRepresentativeEvalSet: true,
-                DefaultHasDeterministicValidation: false,
-                DefaultRequiresStrictStructuredOutput: false,
+                DefaultHasDeterministicValidation: true,
+                DefaultRequiresStrictStructuredOutput: true,
                 DefaultHasSilentFailureRisk: false),
             [TaskCategoryOption.Summarization] = new(
                 Category: TaskCategoryOption.Summarization,
                 BaseDifficultyPercentResidual: 0,
-                DefaultBaseDifficulty: 10,
+                DefaultBaseDifficulty: 15,
                 DefaultContextRequirement: ContextRequirementOption.LargeClean,
                 DefaultReasoningDepth: ReasoningDepthOption.ModerateMultiStep,
                 DefaultToolUse: ToolUseOption.None,
@@ -306,7 +306,7 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
             [TaskCategoryOption.CodeGeneration] = new(
                 Category: TaskCategoryOption.CodeGeneration,
                 BaseDifficultyPercentResidual: 4,
-                DefaultBaseDifficulty: 22,
+                DefaultBaseDifficulty: 25,
                 DefaultContextRequirement: ContextRequirementOption.MediumMostlyRelevant,
                 DefaultReasoningDepth: ReasoningDepthOption.ModerateMultiStep,
                 DefaultToolUse: ToolUseOption.OneOrTwoDeterministicTools,
@@ -358,7 +358,7 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
     /// </summary>
     /// <param name="inputs">The use case configuration to score.</param>
     /// <returns>A summary containing difficulty factors, guardrails, and ranked model recommendations.</returns>
-    public async Task<AnalysisSummary> Analyze(UseCaseInputs inputs)
+    public static AnalysisSummary Analyze(UseCaseInputs inputs)
     {
         var difficultyFactors = new List<string>();
         var guardrailFactors = new List<string>();
@@ -431,7 +431,7 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
         var targetSuccess = inputs.RequiredSuccessRate / 100d;
         var allowedCriticalFailure = inputs.AllowedCriticalFailureRate / 100d;
 
-        var results = (await modelCatalog.GetLatestModelData())
+        var results = ModelCatalog.Models
             .Select(model => AnalyzeModel(model, inputs, difficulty, effectiveTau, attempts, targetSuccess, allowedCriticalFailure, criticalFailureExposureMultiplier))
             .OrderByDescending(x => x.IsEligible)
             .ThenByDescending(x => x.ExpectedValuePerTaskUsd)
@@ -507,48 +507,23 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
         var costPerSuccessfulTask = model.HasCostData ? expectedTotalDirectCost / effectiveSuccess : double.NaN;
         var successPerDollar = model.HasCostData ? effectiveSuccess / Math.Max(expectedTotalDirectCost, 0.000001) * batchSize : 0;
 
-        // NEW: latency. End-to-end seconds are the only cross-comparable latency figure (TTFT/TTFA
-        // diverge only by whether reasoning tokens are streamed, not by real work timing). Expected
-        // latency scales with expected attempts: a model that needs two tries waits twice. Latency is
-        // a cost, not a difficulty term -- it does not change whether the model *can* do the task --
-        // so it lives here in the value calculation, parallel to human-review cost.
-        var expectedLatencySeconds = model.HasLatencyData
-            ? model.EndToEndResponseSeconds!.Value * expectedAttempts
-            : 0d;
-        var expectedLatencyCost = model.HasLatencyData
-            ? expectedLatencySeconds * Math.Max(0, inputs.LatencyCostPerSecondUsd) * batchSize
-            : 0d;
-
         // Expected value retains the asymmetric framing: business value of a success minus direct
-        // cost minus latency cost minus the cost of failure. Failure cost is now split: the critical
-        // share is charged at FailureCostUsd (the expensive tail), the remaining benign share at
-        // BenignFailureCostUsd (caught/retried, usually cheap). criticalFailureRate already carries
-        // every guardrail multiplier (silent-failure, deterministic validation, human approval, the
-        // category exposure terms), so those controls now move EV directly, not just the advisory
-        // downside metric. The benign rate is whatever failure mass is left after the critical part,
-        // floored at 0 in case the multipliers ever push the critical rate above raw failure.
-        var benignFailureRate = Math.Max(0, (1 - effectiveSuccess) - criticalFailureRate);
-        var expectedCriticalFailureCost = model.HasCostData
-            ? inputs.FailureCostUsd * criticalFailureRate * batchSize
-            : double.NaN;
-        var expectedBenignFailureCost = model.HasCostData
-            ? Math.Max(0, inputs.BenignFailureCostUsd) * benignFailureRate * batchSize
-            : double.NaN;
-
+        // cost minus the cost of a failure, where FailureCostUsd is the *expected* failure cost. The
+        // tail of that distribution is reported separately via WorstCaseFailureCostUsd so two models
+        // with equal EV but different downside are distinguishable.
         var expectedValue = model.HasCostData
             ? inputs.BusinessValuePerSuccessUsd * effectiveSuccess * batchSize
               - expectedTotalDirectCost
-              - expectedLatencyCost
-              - expectedCriticalFailureCost
-              - expectedBenignFailureCost
+              - inputs.FailureCostUsd * (1 - effectiveSuccess) * batchSize
             : double.NaN;
         var monthlyExpectedValue = model.HasCostData ? expectedValue * Math.Max(0, inputs.MonthlyVolume) : double.NaN;
 
         // NEW: downside exposure. The expected critical-failure cost over the batch, i.e. the part
-        // of failure that is genuinely harmful rather than merely a retry. This is identical to
-        // expectedCriticalFailureCost above; kept as a distinctly named output so the asymmetric-cost
-        // philosophy remains a number a reviewer can threshold on independent of the EV breakdown.
-        var worstCaseFailureCost = expectedCriticalFailureCost;
+        // of failure that is genuinely harmful rather than merely a retry. Lets the asymmetric-cost
+        // philosophy show up as a number a reviewer can threshold on, not just an EV term.
+        var worstCaseFailureCost = model.HasCostData
+            ? inputs.FailureCostUsd * criticalFailureRate * batchSize
+            : double.NaN;
 
         if (!model.HasCostData)
         {
@@ -565,26 +540,6 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
             reasons.Add($"Estimated critical-failure rate {criticalFailureRate:P2} is above allowed rate {allowedCriticalFailure:P2}.");
         }
 
-        // NEW: latency handling. Latency only matters to eligibility when the user has actually
-        // priced it (cost per second) or capped it (finite ceiling). When neither is set, latency is
-        // ignored entirely and missing data is harmless.
-        var latencyIsActive = inputs.LatencyCostPerSecondUsd > 0
-            || !double.IsPositiveInfinity(inputs.MaxAcceptableLatencySeconds);
-
-        if (latencyIsActive && !model.HasLatencyData)
-        {
-            // A data gap must not become a competitive advantage. If latency is priced or gated and
-            // we cannot measure this model's latency, exclude it the same way a model with no cost
-            // data is excluded -- rather than scoring it as instantaneous and free.
-            reasons.Add("No latency data is available for this model, so it cannot be evaluated against the latency cost or limit.");
-        }
-        else if (model.HasLatencyData
-            && !double.IsPositiveInfinity(inputs.MaxAcceptableLatencySeconds)
-            && expectedLatencySeconds > inputs.MaxAcceptableLatencySeconds)
-        {
-            reasons.Add($"Estimated latency {expectedLatencySeconds:n1}s exceeds the maximum acceptable {inputs.MaxAcceptableLatencySeconds:n1}s.");
-        }
-
         var isEligible = reasons.Count == 0;
         var recommendationReason = BuildRecommendationReason(model, expectedValue, effectiveSuccess, expectedTotalDirectCost, costPerSuccessfulTask, criticalFailureRate, isEligible, reasons);
 
@@ -593,7 +548,7 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
             Model = model,
             EffectiveDifficulty = difficulty,
             Tau = tau,
-            AdjustedIntelligence = adjustedIntelligence,
+            //AdjustedIntelligence = adjustedIntelligence,
             SingleAttemptSuccessRate = singleAttemptSuccess,
             EffectiveSuccessRate = effectiveSuccess,
             CriticalFailureRate = criticalFailureRate,
@@ -606,11 +561,7 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
             CostPerSuccessfulTaskUsd = costPerSuccessfulTask,
             ExpectedValuePerTaskUsd = expectedValue,
             MonthlyExpectedValueUsd = monthlyExpectedValue,
-            ExpectedCriticalFailureCostUsd = expectedCriticalFailureCost,
-            ExpectedBenignFailureCostUsd = expectedBenignFailureCost,
-            WorstCaseFailureCostUsd = worstCaseFailureCost,
-            ExpectedLatencySeconds = expectedLatencySeconds,
-            ExpectedLatencyCostUsd = expectedLatencyCost,
+            //WorstCaseFailureCostUsd = worstCaseFailureCost,
             SuccessPerDollar = successPerDollar,
             IsEligible = isEligible,
             ExclusionReasons = reasons,
