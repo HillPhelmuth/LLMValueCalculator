@@ -438,3 +438,14 @@ FodyWeavers.xsd
 /AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer/obj/Debug/net10.0/AAInteractiveValueAnalyzer.AssemblyInfoInputs.cache
 /AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/obj/Debug/net10.0/AAInteractiveValueAnalyzer.Client.AssemblyInfo.cs
 /AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/obj/Debug/net10.0/AAInteractiveValueAnalyzer.Client.AssemblyInfoInputs.cache
+/AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/bin/Debug/net10.0/wwwroot/_framework/dotnet.js
+/AAInteractiveValueAnalyzer/AAOutput/*.json
+/AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer/bin/*
+/AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer/obj/*
+/AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/bin/*
+/AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/obj/*
+.generated_claude/
+/AAInteractiveValueAnalyzer/AAOutput/*.json
+/AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer/bin/Debug/net10.0/AAInteractiveValueAnalyzer.Client.dll
+/AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer/bin/Debug/net10.0/AAInteractiveValueAnalyzer.dll
+/AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer/bin/Debug/net10.0/AAInteractiveValueAnalyzer.exe
