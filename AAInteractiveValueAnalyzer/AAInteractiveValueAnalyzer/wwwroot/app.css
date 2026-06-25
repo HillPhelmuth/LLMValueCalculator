@@ -325,10 +325,10 @@ h3 {
 
 .compact-field span {
     color: #2f2f2d;
-    font-size: 0.75rem;
+    font-size: 0.70rem;
     font-weight: 750;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+   
 }
 
 .field-grid.two {
@@ -340,7 +340,7 @@ label span, .range-label span {
     color: #2f2f2d;
     font-size: 0.86rem;
     font-weight: 750;
-    margin-bottom: 8px;
+    margin-bottom: 3px;
 }
 
 input[type="text"],
@@ -348,13 +348,13 @@ input[type="number"],
 select {
     width: 100%;
     min-height: 36px;
-    padding: 8px 10px;
+    padding: 4px 5px;
     border: 1px solid var(--border-strong);
     border-radius: 10px;
     background: #fff;
     color: var(--text);
     outline: none;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
 }
 
     input[type="text"]:focus,
@@ -455,11 +455,10 @@ small {
 .preset-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
 }
 
 .preset-item {
-    padding: 8px 10px;
+    padding: 2px 3px;
     border-radius: 12px;
     border: 1px solid var(--border);
     background: #fbfbfb;
@@ -468,14 +467,14 @@ small {
     .preset-item span {
         display: block;
         color: var(--muted);
-        font-size: 0.72rem;
+        font-size: 0.66rem;
         text-transform: uppercase;
         letter-spacing: 0.05em;
         margin-bottom: 3px;
     }
 
     .preset-item strong {
-        font-size: 0.87rem;
+        font-size: 0.75rem;
     }
 
 .range-label {
@@ -766,6 +765,9 @@ select {
         padding: var(--row-pad-y) var(--row-pad-x);
         vertical-align: top;
         white-space: nowrap;
+        max-width: 255px;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .dense-table .wrap-cell {
@@ -1035,6 +1037,12 @@ tr.excluded td:first-child {
 .negative {
     color: var(--negative);
     font-weight: 850;
+}
+
+/* "No limit" placeholder on the max-latency input reads as inactive, not as a real value. */
+.compact-field input[type="number"]::placeholder {
+    color: #9a9a94;
+    font-style: italic;
 }
 
 .bar-meter {

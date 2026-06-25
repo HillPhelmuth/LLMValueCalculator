@@ -1,7 +1,7 @@
 <PageTitle>Model Value Analyzer</PageTitle>
 
 @{
-    var summary = RecommendationEngine.Analyze(Inputs);
+    var summary = Summary;
     var topRecommendations = GetRecommendationRows(summary).ToList();
     var comparisonRows = GetComparisonRows(summary).ToList();
 }
@@ -371,10 +371,18 @@
 
                     <label class="compact-field">
                         <div class="field-label-row">
-                            <span>Failure cost $</span>
-                            <button type="button" class="icon-button help-button" title="Explain failure cost" aria-label='@GetFieldHelpAriaLabel("failure-cost")' @onclick='() => ShowFieldHelp("failure-cost")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                            <span>Critical fail $</span>
+                            <button type="button" class="icon-button help-button" title="Explain critical failure cost" aria-label='@GetFieldHelpAriaLabel("failure-cost")' @onclick='() => ShowFieldHelp("failure-cost")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
                         </div>
                         <input type="number" min="0" step="0.25" @bind="Inputs.FailureCostUsd" />
+                    </label>
+
+                    <label class="compact-field">
+                        <div class="field-label-row">
+                            <span>Benign fail $</span>
+                            <button type="button" class="icon-button help-button" title="Explain benign failure cost" aria-label='@GetFieldHelpAriaLabel("benign-failure-cost")' @onclick='() => ShowFieldHelp("benign-failure-cost")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                        </div>
+                        <input type="number" min="0" step="0.25" @bind="Inputs.BenignFailureCostUsd" />
                     </label>
 
                     <label class="compact-field">
@@ -400,12 +408,28 @@
                         </div>
                         <input type="number" min="0" step="1" @bind="Inputs.MonthlyVolume" />
                     </label>
+
+                    <label class="compact-field">
+                        <div class="field-label-row">
+                            <span>Latency $/sec</span>
+                            <button type="button" class="icon-button help-button" title="Explain latency cost" aria-label='@GetFieldHelpAriaLabel("latency-cost")' @onclick='() => ShowFieldHelp("latency-cost")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                        </div>
+                        <input type="number" min="0" step="0.005" @bind="Inputs.LatencyCostPerSecondUsd" />
+                    </label>
+
+                    <label class="compact-field">
+                        <div class="field-label-row">
+                            <span>Max latency (s)</span>
+                            <button type="button" class="icon-button help-button" title="Explain max latency" aria-label='@GetFieldHelpAriaLabel("max-latency")' @onclick='() => ShowFieldHelp("max-latency")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                        </div>
+                        <input type="number" min="0" step="1" placeholder="No limit" @bind="MaxLatencyInput" />
+                    </label>
                 </div>
             </div>
 
             <div class="dense-section decision-rule-inline">
                 <strong>Decision rule</strong>
-                <p>Eligible models must clear both hard constraints. Ranking uses <code>EV/1k = 1000 * (businessValue * p - directCost - failureCost * (1 - p))</code>.</p>
+                <p>Eligible models must clear both hard constraints. Ranking uses <code>EV/1k = 1000 * (businessValue * p - directCost - latencyCost - critFailCost * critRate - benignFailCost * (1 - p - critRate))</code>.</p>
             </div>
         </section>
 
@@ -549,6 +573,18 @@
                                             </button>
                                         </th>
                                     }
+                                    @if (IsColumnVisible(VisibleRecommendationColumns, "latency"))
+                                    {
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(RecommendationSort.ColumnKey == "latency" ? "active" : null)"
+                                                    aria-label="Sort recommendations by expected latency seconds"
+                                                    @onclick='() => ToggleSort(true, "latency")'>
+                                                <span>Latency</span>
+                                                <span class="sort-indicator">@GetSortIndicator(RecommendationSort, "latency")</span>
+                                            </button>
+                                        </th>
+                                    }
                                     @if (IsColumnVisible(VisibleRecommendationColumns, "costsuccess"))
                                     {
                                         <th>
@@ -644,6 +680,10 @@
                                         {
                                             <td class="num">@Currency(item.result.ExpectedTotalDirectCostUsd)</td>
                                         }
+                                        @if (IsColumnVisible(VisibleRecommendationColumns, "latency"))
+                                        {
+                                            <td class="num">@LatencySeconds(item.result)</td>
+                                        }
                                         @if (IsColumnVisible(VisibleRecommendationColumns, "costsuccess"))
                                         {
                                             <td class="num">@Currency(item.result.CostPerSuccessfulTaskUsd)</td>
@@ -665,7 +705,9 @@
                                                     class="icon-button"
                                                     title="Additional data"
                                                     aria-label="Show additional data for @item.result.Model.DisplayName"
-                                                    @onclick="() => ShowRecommendationData(item.result)">i</button>
+                                                    @onclick="() => ShowRecommendationData(item.result)">
+                                                i
+                                            </button>
                                         </td>
                                     </tr>
                                 }
@@ -696,7 +738,7 @@
                             <ul class="factor-list">
                                 @foreach (var factor in summary.DifficultyFactors)
                                 {
-                                <li>@factor</li>
+                                    <li>@factor</li>
                                 }
                             </ul>
                         </div>
@@ -705,7 +747,7 @@
                             <ul class="factor-list">
                                 @foreach (var factor in summary.GuardrailFactors)
                                 {
-                                <li>@factor</li>
+                                    <li>@factor</li>
                                 }
                             </ul>
                         </div>
@@ -777,290 +819,356 @@
                         <table class="dense-table comparison-table">
                             <thead>
                                 <tr>
-                                <th>
-                                    <button type="button"
-                                            class="sort-header-button @(ComparisonSort.ColumnKey == "model" ? "active" : null)"
-                                            aria-label="Sort comparison table by model"
-                                            @onclick='() => ToggleSort(false, "model")'>
-                                        <span>Model</span>
-                                        <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "model")</span>
-                                    </button>
-                                </th>
-                                @if (IsColumnVisible(VisibleComparisonColumns, "intel"))
-                                {
                                     <th>
                                         <button type="button"
-                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "intel" ? "active" : null)"
-                                                aria-label="Sort comparison table by adjusted intelligence"
-                                                @onclick='() => ToggleSort(false, "intel")'>
-                                            <span>Adj IQ</span>
-                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "intel")</span>
+                                                class="sort-header-button @(ComparisonSort.ColumnKey == "model" ? "active" : null)"
+                                                aria-label="Sort comparison table by model"
+                                                @onclick='() => ToggleSort(false, "model")'>
+                                            <span>Model</span>
+                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "model")</span>
                                         </button>
                                     </th>
-                                }
-                                @if (IsColumnVisible(VisibleComparisonColumns, "aacost"))
-                                {
-                                    <th>
-                                        <button type="button"
-                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "aacost" ? "active" : null)"
-                                                aria-label="Sort comparison table by AA cost per 1000 tasks"
-                                                @onclick='() => ToggleSort(false, "aacost")'>
-                                            <span>AA/1k</span>
-                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "aacost")</span>
-                                        </button>
-                                    </th>
-                                }
-                                @if (IsColumnVisible(VisibleComparisonColumns, "success"))
-                                {
-                                    <th>
-                                        <button type="button"
-                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "success" ? "active" : null)"
-                                                aria-label="Sort comparison table by success"
-                                                @onclick='() => ToggleSort(false, "success")'>
-                                            <span>Success</span>
-                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "success")</span>
-                                        </button>
-                                    </th>
-                                }
-                                @if (IsColumnVisible(VisibleComparisonColumns, "single"))
-                                {
-                                    <th>
-                                        <button type="button"
-                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "single" ? "active" : null)"
-                                                aria-label="Sort comparison table by single-attempt success"
-                                                @onclick='() => ToggleSort(false, "single")'>
-                                            <span>1-attempt</span>
-                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "single")</span>
-                                        </button>
-                                    </th>
-                                }
-                                @if (IsColumnVisible(VisibleComparisonColumns, "critical"))
-                                {
-                                    <th>
-                                        <button type="button"
-                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "critical" ? "active" : null)"
-                                                aria-label="Sort comparison table by critical failure"
-                                                @onclick='() => ToggleSort(false, "critical")'>
-                                            <span>Crit. fail</span>
-                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "critical")</span>
-                                        </button>
-                                    </th>
-                                }
-                                @if (IsColumnVisible(VisibleComparisonColumns, "attempts"))
-                                {
-                                    <th>
-                                        <button type="button"
-                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "attempts" ? "active" : null)"
-                                                aria-label="Sort comparison table by expected tries"
-                                                @onclick='() => ToggleSort(false, "attempts")'>
-                                            <span>Exp. tries</span>
-                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "attempts")</span>
-                                        </button>
-                                    </th>
-                                }
-                                @if (IsColumnVisible(VisibleComparisonColumns, "modelcost"))
-                                {
-                                    <th>
-                                        <button type="button"
-                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "modelcost" ? "active" : null)"
-                                                aria-label="Sort comparison table by model cost per 1000 tasks"
-                                                @onclick='() => ToggleSort(false, "modelcost")'>
-                                            <span>Model/1k</span>
-                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "modelcost")</span>
-                                        </button>
-                                    </th>
-                                }
-                                @if (IsColumnVisible(VisibleComparisonColumns, "review"))
-                                {
-                                    <th>
-                                        <button type="button"
-                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "review" ? "active" : null)"
-                                                aria-label="Sort comparison table by review cost per 1000 tasks"
-                                                @onclick='() => ToggleSort(false, "review")'>
-                                            <span>Review/1k</span>
-                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "review")</span>
-                                        </button>
-                                    </th>
-                                }
-                                @if (IsColumnVisible(VisibleComparisonColumns, "retry"))
-                                {
-                                    <th>
-                                        <button type="button"
-                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "retry" ? "active" : null)"
-                                                aria-label="Sort comparison table by retry overhead per 1000 tasks"
-                                                @onclick='() => ToggleSort(false, "retry")'>
-                                            <span>Retry/1k</span>
-                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "retry")</span>
-                                        </button>
-                                    </th>
-                                }
-                                @if (IsColumnVisible(VisibleComparisonColumns, "direct"))
-                                {
-                                    <th>
-                                        <button type="button"
-                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "direct" ? "active" : null)"
-                                                aria-label="Sort comparison table by direct cost per 1000 tasks"
-                                                @onclick='() => ToggleSort(false, "direct")'>
-                                            <span>Direct/1k</span>
-                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "direct")</span>
-                                        </button>
-                                    </th>
-                                }
-                                @if (IsColumnVisible(VisibleComparisonColumns, "costsuccess"))
-                                {
-                                    <th>
-                                        <button type="button"
-                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "costsuccess" ? "active" : null)"
-                                                aria-label="Sort comparison table by cost per 1000 successful tasks"
-                                                @onclick='() => ToggleSort(false, "costsuccess")'>
-                                            <span>Cost/1k success</span>
-                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "costsuccess")</span>
-                                        </button>
-                                    </th>
-                                }
-                                @if (IsColumnVisible(VisibleComparisonColumns, "successdollar"))
-                                {
-                                    <th>
-                                        <button type="button"
-                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "successdollar" ? "active" : null)"
-                                                aria-label="Sort comparison table by success per dollar"
-                                                @onclick='() => ToggleSort(false, "successdollar")'>
-                                            <span>Success/$</span>
-                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "successdollar")</span>
-                                        </button>
-                                    </th>
-                                }
-                                @if (IsColumnVisible(VisibleComparisonColumns, "ev"))
-                                {
-                                    <th>
-                                        <button type="button"
-                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "ev" ? "active" : null)"
-                                                aria-label="Sort comparison table by expected value per 1000 tasks"
-                                                @onclick='() => ToggleSort(false, "ev")'>
-                                            <span>EV/1k</span>
-                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "ev")</span>
-                                        </button>
-                                    </th>
-                                }
-                                @if (IsColumnVisible(VisibleComparisonColumns, "monthly"))
-                                {
-                                    <th>
-                                        <button type="button"
-                                                class="sort-header-button num @(ComparisonSort.ColumnKey == "monthly" ? "active" : null)"
-                                                aria-label="Sort comparison table by monthly expected value"
-                                                @onclick='() => ToggleSort(false, "monthly")'>
-                                            <span>Monthly EV</span>
-                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "monthly")</span>
-                                        </button>
-                                    </th>
-                                }
-                                @if (IsColumnVisible(VisibleComparisonColumns, "status"))
-                                {
-                                    <th>
-                                        <button type="button"
-                                                class="sort-header-button @(ComparisonSort.ColumnKey == "status" ? "active" : null)"
-                                                aria-label="Sort comparison table by status"
-                                                @onclick='() => ToggleSort(false, "status")'>
-                                            <span>Status</span>
-                                            <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "status")</span>
-                                        </button>
-                                    </th>
-                                }
-                                <th class="num">More</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                            @foreach (var item in comparisonRows)
-                            {
-                                <tr class="@(item.IsEligible ? "eligible" : "excluded")" @key="item.Model.DisplayName">
-                                    <td>
-                                        <strong>@item.Model.DisplayName</strong>
-                                        @* @if (!string.IsNullOrWhiteSpace(item.Model.Notes))
-                                        {
-                                            <small>@item.Model.Notes</small>
-                                        } *@
-                                    </td>
                                     @if (IsColumnVisible(VisibleComparisonColumns, "intel"))
                                     {
-                                        <td class="num">
-                                            <div>@item.Model.AdjustedIntelligence.ToString("0")</div>
-                                            <small>Raw @item.Model.IntelligenceIndex.ToString("0")</small>
-                                        </td>
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(ComparisonSort.ColumnKey == "intel" ? "active" : null)"
+                                                    aria-label="Sort comparison table by adjusted intelligence"
+                                                    @onclick='() => ToggleSort(false, "intel")'>
+                                                <span>Adj IQ</span>
+                                                <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "intel")</span>
+                                            </button>
+                                        </th>
                                     }
                                     @if (IsColumnVisible(VisibleComparisonColumns, "aacost"))
                                     {
-                                        <td class="num">@BatchCurrency(item.Model.CostPerAaTaskUsd)</td>
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(ComparisonSort.ColumnKey == "aacost" ? "active" : null)"
+                                                    aria-label="Sort comparison table by AA cost per 1000 tasks"
+                                                    @onclick='() => ToggleSort(false, "aacost")'>
+                                                <span>AA/1k</span>
+                                                <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "aacost")</span>
+                                            </button>
+                                        </th>
                                     }
                                     @if (IsColumnVisible(VisibleComparisonColumns, "success"))
                                     {
-                                        <td class="num">@Percent(item.EffectiveSuccessRate)</td>
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(ComparisonSort.ColumnKey == "success" ? "active" : null)"
+                                                    aria-label="Sort comparison table by success"
+                                                    @onclick='() => ToggleSort(false, "success")'>
+                                                <span>Success</span>
+                                                <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "success")</span>
+                                            </button>
+                                        </th>
                                     }
                                     @if (IsColumnVisible(VisibleComparisonColumns, "single"))
                                     {
-                                        <td class="num">@Percent(item.SingleAttemptSuccessRate)</td>
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(ComparisonSort.ColumnKey == "single" ? "active" : null)"
+                                                    aria-label="Sort comparison table by single-attempt success"
+                                                    @onclick='() => ToggleSort(false, "single")'>
+                                                <span>1-attempt</span>
+                                                <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "single")</span>
+                                            </button>
+                                        </th>
                                     }
                                     @if (IsColumnVisible(VisibleComparisonColumns, "critical"))
                                     {
-                                        <td class="num">@Percent(item.CriticalFailureRate, 2)</td>
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(ComparisonSort.ColumnKey == "critical" ? "active" : null)"
+                                                    aria-label="Sort comparison table by critical failure"
+                                                    @onclick='() => ToggleSort(false, "critical")'>
+                                                <span>Crit. fail</span>
+                                                <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "critical")</span>
+                                            </button>
+                                        </th>
                                     }
                                     @if (IsColumnVisible(VisibleComparisonColumns, "attempts"))
                                     {
-                                        <td class="num">@Number(item.ExpectedAttempts, "0.00")</td>
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(ComparisonSort.ColumnKey == "attempts" ? "active" : null)"
+                                                    aria-label="Sort comparison table by expected tries"
+                                                    @onclick='() => ToggleSort(false, "attempts")'>
+                                                <span>Exp. tries</span>
+                                                <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "attempts")</span>
+                                            </button>
+                                        </th>
                                     }
                                     @if (IsColumnVisible(VisibleComparisonColumns, "modelcost"))
                                     {
-                                        <td class="num">@Currency(item.ExpectedModelCostUsd)</td>
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(ComparisonSort.ColumnKey == "modelcost" ? "active" : null)"
+                                                    aria-label="Sort comparison table by model cost per 1000 tasks"
+                                                    @onclick='() => ToggleSort(false, "modelcost")'>
+                                                <span>Model/1k</span>
+                                                <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "modelcost")</span>
+                                            </button>
+                                        </th>
                                     }
                                     @if (IsColumnVisible(VisibleComparisonColumns, "review"))
                                     {
-                                        <td class="num">@Currency(item.ExpectedReviewCostUsd)</td>
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(ComparisonSort.ColumnKey == "review" ? "active" : null)"
+                                                    aria-label="Sort comparison table by review cost per 1000 tasks"
+                                                    @onclick='() => ToggleSort(false, "review")'>
+                                                <span>Review/1k</span>
+                                                <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "review")</span>
+                                            </button>
+                                        </th>
                                     }
                                     @if (IsColumnVisible(VisibleComparisonColumns, "retry"))
                                     {
-                                        <td class="num">@Currency(item.ExpectedRetryOverheadUsd)</td>
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(ComparisonSort.ColumnKey == "retry" ? "active" : null)"
+                                                    aria-label="Sort comparison table by retry overhead per 1000 tasks"
+                                                    @onclick='() => ToggleSort(false, "retry")'>
+                                                <span>Retry/1k</span>
+                                                <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "retry")</span>
+                                            </button>
+                                        </th>
+                                    }
+                                    @if (IsColumnVisible(VisibleComparisonColumns, "latency"))
+                                    {
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(ComparisonSort.ColumnKey == "latency" ? "active" : null)"
+                                                    aria-label="Sort comparison table by expected latency seconds"
+                                                    @onclick='() => ToggleSort(false, "latency")'>
+                                                <span>Latency</span>
+                                                <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "latency")</span>
+                                            </button>
+                                        </th>
+                                    }
+                                    @if (IsColumnVisible(VisibleComparisonColumns, "latcost"))
+                                    {
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(ComparisonSort.ColumnKey == "latcost" ? "active" : null)"
+                                                    aria-label="Sort comparison table by latency cost per 1000 tasks"
+                                                    @onclick='() => ToggleSort(false, "latcost")'>
+                                                <span>Latency/1k</span>
+                                                <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "latcost")</span>
+                                            </button>
+                                        </th>
+                                    }
+                                    @if (IsColumnVisible(VisibleComparisonColumns, "critfail"))
+                                    {
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(ComparisonSort.ColumnKey == "critfail" ? "active" : null)"
+                                                    aria-label="Sort comparison table by critical-failure cost per 1000 tasks"
+                                                    @onclick='() => ToggleSort(false, "critfail")'>
+                                                <span>Crit fail/1k</span>
+                                                <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "critfail")</span>
+                                            </button>
+                                        </th>
+                                    }
+                                    @if (IsColumnVisible(VisibleComparisonColumns, "benignfail"))
+                                    {
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(ComparisonSort.ColumnKey == "benignfail" ? "active" : null)"
+                                                    aria-label="Sort comparison table by benign-failure cost per 1000 tasks"
+                                                    @onclick='() => ToggleSort(false, "benignfail")'>
+                                                <span>Benign fail/1k</span>
+                                                <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "benignfail")</span>
+                                            </button>
+                                        </th>
                                     }
                                     @if (IsColumnVisible(VisibleComparisonColumns, "direct"))
                                     {
-                                        <td class="num">@Currency(item.ExpectedTotalDirectCostUsd)</td>
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(ComparisonSort.ColumnKey == "direct" ? "active" : null)"
+                                                    aria-label="Sort comparison table by direct cost per 1000 tasks"
+                                                    @onclick='() => ToggleSort(false, "direct")'>
+                                                <span>Direct/1k</span>
+                                                <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "direct")</span>
+                                            </button>
+                                        </th>
                                     }
                                     @if (IsColumnVisible(VisibleComparisonColumns, "costsuccess"))
                                     {
-                                        <td class="num">@Currency(item.CostPerSuccessfulTaskUsd)</td>
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(ComparisonSort.ColumnKey == "costsuccess" ? "active" : null)"
+                                                    aria-label="Sort comparison table by cost per 1000 successful tasks"
+                                                    @onclick='() => ToggleSort(false, "costsuccess")'>
+                                                <span>Cost/1k success</span>
+                                                <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "costsuccess")</span>
+                                            </button>
+                                        </th>
                                     }
                                     @if (IsColumnVisible(VisibleComparisonColumns, "successdollar"))
                                     {
-                                        <td class="num">@Number(item.SuccessPerDollar, "0.00")</td>
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(ComparisonSort.ColumnKey == "successdollar" ? "active" : null)"
+                                                    aria-label="Sort comparison table by success per dollar"
+                                                    @onclick='() => ToggleSort(false, "successdollar")'>
+                                                <span>Success/$</span>
+                                                <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "successdollar")</span>
+                                            </button>
+                                        </th>
                                     }
                                     @if (IsColumnVisible(VisibleComparisonColumns, "ev"))
                                     {
-                                        <td class="num @(item.ExpectedValuePerTaskUsd >= 0 ? "positive" : "negative")">@Currency(item.ExpectedValuePerTaskUsd)</td>
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(ComparisonSort.ColumnKey == "ev" ? "active" : null)"
+                                                    aria-label="Sort comparison table by expected value per 1000 tasks"
+                                                    @onclick='() => ToggleSort(false, "ev")'>
+                                                <span>EV/1k</span>
+                                                <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "ev")</span>
+                                            </button>
+                                        </th>
                                     }
                                     @if (IsColumnVisible(VisibleComparisonColumns, "monthly"))
                                     {
-                                        <td class="num @(item.MonthlyExpectedValueUsd >= 0 ? "positive" : "negative")">@Currency(item.MonthlyExpectedValueUsd)</td>
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button num @(ComparisonSort.ColumnKey == "monthly" ? "active" : null)"
+                                                    aria-label="Sort comparison table by monthly expected value"
+                                                    @onclick='() => ToggleSort(false, "monthly")'>
+                                                <span>Monthly EV</span>
+                                                <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "monthly")</span>
+                                            </button>
+                                        </th>
                                     }
                                     @if (IsColumnVisible(VisibleComparisonColumns, "status"))
                                     {
-                                        <td>
-                                            @if (item.IsEligible)
-                                            {
-                                                <span class="status-pill ok compact">Eligible</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="status-pill warn compact">Excluded</span>
-                                            }
-                                        </td>
+                                        <th>
+                                            <button type="button"
+                                                    class="sort-header-button @(ComparisonSort.ColumnKey == "status" ? "active" : null)"
+                                                    aria-label="Sort comparison table by status"
+                                                    @onclick='() => ToggleSort(false, "status")'>
+                                                <span>Status</span>
+                                                <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "status")</span>
+                                            </button>
+                                        </th>
                                     }
-                                    <td class="num action-cell">
-                                        <button type="button"
-                                                class="icon-button"
-                                                title="Additional data"
-                                                aria-label="Show additional data for @item.Model.DisplayName"
-                                                @onclick="() => ShowComparisonData(item)">i</button>
-                                    </td>
+                                    <th class="num">More</th>
                                 </tr>
-                            }
+                            </thead>
+                            <tbody>
+                                @foreach (var item in comparisonRows)
+                                {
+                                    <tr class="@(item.IsEligible ? "eligible" : "excluded")" @key="item.Model.DisplayName">
+                                        <td>
+                                            <strong>@item.Model.DisplayName</strong>
+                                            @* @if (!string.IsNullOrWhiteSpace(item.Model.Notes))
+                                        {
+                                            <small>@item.Model.Notes</small>
+                                        } *@
+                                        </td>
+                                        @if (IsColumnVisible(VisibleComparisonColumns, "intel"))
+                                        {
+                                            <td class="num">
+                                                <div>@item.Model.AdjustedIntelligence.ToString("0")</div>
+                                                <small>Raw @item.Model.IntelligenceIndex.ToString("0")</small>
+                                            </td>
+                                        }
+                                        @if (IsColumnVisible(VisibleComparisonColumns, "aacost"))
+                                        {
+                                            <td class="num">@BatchCurrency(item.Model.CostPerAaTaskUsd)</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleComparisonColumns, "success"))
+                                        {
+                                            <td class="num">@Percent(item.EffectiveSuccessRate)</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleComparisonColumns, "single"))
+                                        {
+                                            <td class="num">@Percent(item.SingleAttemptSuccessRate)</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleComparisonColumns, "critical"))
+                                        {
+                                            <td class="num">@Percent(item.CriticalFailureRate, 2)</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleComparisonColumns, "attempts"))
+                                        {
+                                            <td class="num">@Number(item.ExpectedAttempts, "0.00")</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleComparisonColumns, "modelcost"))
+                                        {
+                                            <td class="num">@Currency(item.ExpectedModelCostUsd)</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleComparisonColumns, "review"))
+                                        {
+                                            <td class="num">@Currency(item.ExpectedReviewCostUsd)</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleComparisonColumns, "retry"))
+                                        {
+                                            <td class="num">@Currency(item.ExpectedRetryOverheadUsd)</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleComparisonColumns, "latency"))
+                                        {
+                                            <td class="num">@LatencySeconds(item)</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleComparisonColumns, "latcost"))
+                                        {
+                                            <td class="num">@LatencyCost(item)</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleComparisonColumns, "critfail"))
+                                        {
+                                            <td class="num">@(item.Model.HasCostData ? Currency(item.ExpectedCriticalFailureCostUsd) : "n/a")</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleComparisonColumns, "benignfail"))
+                                        {
+                                            <td class="num">@(item.Model.HasCostData ? Currency(item.ExpectedBenignFailureCostUsd) : "n/a")</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleComparisonColumns, "direct"))
+                                        {
+                                            <td class="num">@Currency(item.ExpectedTotalDirectCostUsd)</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleComparisonColumns, "costsuccess"))
+                                        {
+                                            <td class="num">@Currency(item.CostPerSuccessfulTaskUsd)</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleComparisonColumns, "successdollar"))
+                                        {
+                                            <td class="num">@Number(item.SuccessPerDollar, "0.00")</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleComparisonColumns, "ev"))
+                                        {
+                                            <td class="num @(item.ExpectedValuePerTaskUsd >= 0 ? "positive" : "negative")">@Currency(item.ExpectedValuePerTaskUsd)</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleComparisonColumns, "monthly"))
+                                        {
+                                            <td class="num @(item.MonthlyExpectedValueUsd >= 0 ? "positive" : "negative")">@Currency(item.MonthlyExpectedValueUsd)</td>
+                                        }
+                                        @if (IsColumnVisible(VisibleComparisonColumns, "status"))
+                                        {
+                                            <td>
+                                                @if (item.IsEligible)
+                                                {
+                                                    <span class="status-pill ok compact">Eligible</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="status-pill warn compact">Excluded</span>
+                                                }
+                                            </td>
+                                        }
+                                        <td class="num action-cell">
+                                            <button type="button"
+                                                    class="icon-button"
+                                                    title="Additional data"
+                                                    aria-label="Show additional data for @item.Model.DisplayName"
+                                                    @onclick="() => ShowComparisonData(item)">
+                                                i
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
                             </tbody>
                         </table>
                     </div>
@@ -1069,7 +1177,7 @@
 
             <section class="dense-footnote">
                 <p>
-                    Artificial Analysis intelligence and cost values are treated as priors. Production decisions should replace the estimated success curve with measured eval results and real token, retry, tool, latency, review, and failure costs.
+                    Artificial Analysis intelligence and cost values are treated as priors. Production decisions should replace the estimated success curve with measured eval results and real token, retry, tool, latency, review, and critical/benign failure costs.
                 </p>
             </section>
         </div>
