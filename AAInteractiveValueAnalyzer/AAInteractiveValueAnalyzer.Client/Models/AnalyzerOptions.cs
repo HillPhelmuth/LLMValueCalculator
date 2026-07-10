@@ -46,6 +46,8 @@ public enum DifficultySensitivityOption
 
 public enum ContextRequirementOption
 {
+    [Description("No context required")]
+    None,
     [Description("Short, clean context")]
     ShortClean,
 

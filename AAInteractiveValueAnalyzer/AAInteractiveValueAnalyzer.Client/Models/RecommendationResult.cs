@@ -16,6 +16,8 @@ public sealed class RecommendationResult
     public double ExpectedRetryOverheadUsd { get; init; }
     public double ExpectedTotalDirectCostUsd { get; init; }
     public double CostPerSuccessfulTaskUsd { get; init; }
+    public double RealizedGoodOutcomeShare { get; init; }
+    public double BlendedValuePerSuccessUsd { get; init; }
     public double ExpectedValuePerTaskUsd { get; init; }
     public double MonthlyExpectedValueUsd { get; init; }
     public double ExpectedCriticalFailureCostUsd { get; init; }

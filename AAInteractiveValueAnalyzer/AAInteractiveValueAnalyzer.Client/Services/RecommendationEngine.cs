@@ -103,6 +103,66 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
     public const double BaseDifficultyOverrideWeight = 0.6;
 
     /// <summary>
+    /// How strongly a model's headroom above the task tilts the realized good-output share around the
+    /// user's base assumption (<see cref="UseCaseInputs.GoodOutcomeShareOfSuccesses"/>).
+    /// </summary>
+    /// <remarks>
+    /// Partial credit splits a *passing* task into a fully-correct ("good") outcome worth the full
+    /// business value and a degraded-but-acceptable outcome worth less. The share that lands in the
+    /// good tier is not constant across models: a model that clears the difficulty bar with room to
+    /// spare produces cleaner output than one that barely clears it, so two models with the *same*
+    /// pass rate can still differ in realized value. We model that by tilting the base good-share by
+    /// the model's single-attempt headroom -- how far its pre-retry success sits above the 0.5
+    /// midpoint, in [-0.5, +0.5] -- scaled by this constant. At 0.30 a maximally-comfortable model
+    /// (headroom +0.5) gets +0.15 added to its good-share and a maximally-marginal one (-0.5) loses
+    /// 0.15, with the result clamped to [0,1]. Set to 0 to make the good-share a flat constant and
+    /// decouple realized quality from model strength. This is what makes partial credit move the
+    /// ranking rather than apply a constant haircut that cancels out of every comparison.
+    /// </remarks>
+    public const double QualityShareDifficultyTilt = 0.30;
+
+    /// <summary>
+    /// How strongly a model's headroom tilts the critical share of its *failures*, mirroring
+    /// <see cref="QualityShareDifficultyTilt"/> on the downside.
+    /// </summary>
+    /// <remarks>
+    /// NEW. The upside tilt says a comfortable model realizes more good outcomes among its passes.
+    /// The mirror claim holds for failures: a marginal model's failures skew toward catastrophic
+    /// misreadings of the task, while a comfortable model's rare failures skew toward benign slips
+    /// (formatting, minor omissions). Negative headroom therefore raises the critical share of
+    /// failures and positive headroom lowers it, scaled by this constant and clamped to [0,1],
+    /// before the detection multipliers (silent failure, validation, approval) apply. Set to 0 to
+    /// make the critical share a flat user assumption independent of model strength. Kept equal to
+    /// the upside tilt by default so the two halves of the asymmetry are symmetric priors; both are
+    /// candidates for fitting.
+    /// </remarks>
+    public const double CriticalShareDifficultyTilt = 0.30;
+
+    /// <summary>
+    /// Systematic single-attempt failure floor applied to every model regardless of task
+    /// difficulty: refusals, formatting flukes, infrastructure errors, truncation.
+    /// </summary>
+    /// <remarks>
+    /// NEW. Without a floor the sigmoid promises arbitrarily high success (a frontier model on an
+    /// easy task approaches 99.9999% and sails through a 99.5% required-success gate), which is
+    /// exactly where the tool's answer matters most. Success is now the product of two hurdles:
+    /// the capability hurdle (the sigmoid) and this systematic hurdle. The floor is modeled as
+    /// retry-resistant -- a refusal or infra failure recurs on retry at roughly the same rate --
+    /// so retries recover only capability failures and no amount of retrying approaches 100%.
+    /// The 1% default is a deliberate prior, not a measurement; it is a natural per-model figure
+    /// once calibration data exists.
+    /// </remarks>
+    public const double BaseErrorFloorRate = 0.01;
+
+    /// <summary>
+    /// Independence weight of each additional retry attempt. The 2nd attempt counts as this
+    /// fraction of a fresh independent try, the 3rd as the square, and so on. Shared by the
+    /// success side (<see cref="EffectiveIndependentAttempts"/>) and the cost side
+    /// (<see cref="ExpectedAttempts"/>) so both halves of the ledger use one retry model.
+    /// </summary>
+    public const double RetryCorrelationDecay = 0.6;
+
+    /// <summary>
     /// Configurable convex transform applied to the raw intelligence index before it is compared to
     /// task difficulty. The transform is deliberately convex: a gap near the top of the index
     /// (e.g. 53 -> 56) reflects a larger real capability difference than the same nominal gap near
@@ -293,6 +353,14 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
                 DefaultHasDeterministicValidation: false,
                 DefaultRequiresStrictStructuredOutput: false,
                 DefaultHasSilentFailureRisk: false),
+            [TaskCategoryOption.ClassificationRouting] = new(TaskCategoryOption.ClassificationRouting,
+                BaseDifficultyPercentResidual: 0, DefaultBaseDifficulty: 10,
+                DefaultContextRequirement: ContextRequirementOption.LargeClean,
+                DefaultReasoningDepth: ReasoningDepthOption.ModerateMultiStep,
+                DefaultToolUse: ToolUseOption.None,
+                DefaultVerifiability: VerifiabilityOption.MostlyVerifiableByReviewer,
+                DefaultOutputConstraint: OutputConstraintOption.FreeText,
+                DefaultHasSilentFailureRisk: true),
             [TaskCategoryOption.Summarization] = new(
                 Category: TaskCategoryOption.Summarization,
                 BaseDifficultyPercentResidual: 0,
@@ -473,11 +541,29 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
         // curve has a single configurable home. model.IntelligenceIndex is the raw AA index.
         var adjustedIntelligence = AdjustedIntelligence(model.IntelligenceIndex);
 
-        var singleAttemptSuccess = Sigmoid((adjustedIntelligence - difficulty) / tau);
-        var effectiveSuccess = 1 - Math.Pow(1 - singleAttemptSuccess, EffectiveIndependentAttempts(attempts));
+        // CHANGED: success is now the product of two independent hurdles. The sigmoid models the
+        // capability hurdle (can the model do the task at all); BaseErrorFloorRate models the
+        // systematic hurdle (refusals, formatting flukes, infrastructure errors) that is
+        // independent of difficulty and does not shrink with retries. Previously the sigmoid alone
+        // could promise 99.9999% success on easy tasks and sail through a 99.5% required-success
+        // gate that no real deployment clears.
+        var capabilitySuccess = Math.Clamp(Sigmoid((adjustedIntelligence - difficulty) / tau), 0.000001, 0.999999);
+        var singleAttemptSuccess = (1 - BaseErrorFloorRate) * capabilitySuccess;
+
+        // Retries recover only correlated capability failures; the systematic floor survives them.
+        var effectiveSuccess = (1 - BaseErrorFloorRate) * (1 - Math.Pow(1 - capabilitySuccess, EffectiveIndependentAttempts(attempts)));
         effectiveSuccess = Math.Clamp(effectiveSuccess, 0.000001, 0.999999);
 
-        var expectedAttempts = ExpectedAttempts(singleAttemptSuccess, attempts);
+        // Headroom above the difficulty bar, in [-0.5, +0.5). Drives the quality tilt on the
+        // upside (realized good-share) and, mirrored, the critical-share tilt on the downside.
+        var qualityHeadroom = singleAttemptSuccess - 0.5;
+
+        // CHANGED: expected attempts now come from the same correlated-retry model as
+        // effectiveSuccess. Previously this used the independent geometric formula, which
+        // understates attempts for weak models (a model that failed a hard task tends to fail the
+        // retry on the same task), so the ledger charged optimistic cost against
+        // correlation-discounted success -- two different retry models on the two sides.
+        var expectedAttempts = ExpectedAttempts(capabilitySuccess, attempts);
         var baseModelCost = model.CostPerAaTaskUsd.GetValueOrDefault() * inputs.CostMultiplier;
         var expectedModelCost = model.HasCostData ? baseModelCost * expectedAttempts * batchSize : double.NaN;
         var expectedReviewCost = Math.Max(0, inputs.HumanReviewCostUsd) * batchSize;
@@ -487,6 +573,12 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
             : double.NaN;
 
         var criticalFailureShare = Math.Clamp(inputs.CriticalFailureShareOfFailures / 100d, 0, 1);
+
+        // NEW: downside mirror of the quality tilt. Negative headroom (marginal model) raises the
+        // critical share of failures, positive headroom lowers it; see CriticalShareDifficultyTilt.
+        // Applied to the user's base assumption before the detection multipliers.
+        criticalFailureShare = Math.Clamp(criticalFailureShare - qualityHeadroom * CriticalShareDifficultyTilt, 0, 1);
+
         if (inputs.HasSilentFailureRisk)
         {
             criticalFailureShare = Math.Min(1, criticalFailureShare * SilentFailureCriticalShareMultiplier);
@@ -504,6 +596,14 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
             criticalFailureRate *= HumanApprovalCriticalMultiplier;
         }
 
+        // CHANGED: cap the critical rate at the total failure mass. With the share saturated at 1
+        // (silent-failure multiplier) and an exposure multiplier above 1 (e.g. the 1.35 agentic
+        // term), the product could previously exceed (1 - effectiveSuccess), charging a model 135%
+        // of its failures as critical -- inflating EV penalties, the worst-case metric, and the
+        // eligibility check beyond probability semantics. A model cannot fail critically more
+        // often than it fails. Applied after every multiplier.
+        criticalFailureRate = Math.Min(criticalFailureRate, 1 - effectiveSuccess);
+
         var costPerSuccessfulTask = model.HasCostData ? expectedTotalDirectCost / effectiveSuccess : double.NaN;
         var successPerDollar = model.HasCostData ? effectiveSuccess / Math.Max(expectedTotalDirectCost, 0.000001) * batchSize : 0;
 
@@ -512,12 +612,31 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
         // latency scales with expected attempts: a model that needs two tries waits twice. Latency is
         // a cost, not a difficulty term -- it does not change whether the model *can* do the task --
         // so it lives here in the value calculation, parallel to human-review cost.
+        // CHANGED: missing latency data now reports NaN, matching the missing-cost sentinel,
+        // instead of 0 -- a rendered "0.0s" reads as "instant and free". The EV sum still charges
+        // 0 in that case (latencyCostCharged): when latency is priced or capped the model is
+        // excluded below anyway, and when it is not, zero is the honest charge.
         var expectedLatencySeconds = model.HasLatencyData
             ? model.EndToEndResponseSeconds!.Value * expectedAttempts
-            : 0d;
+            : double.NaN;
         var expectedLatencyCost = model.HasLatencyData
             ? expectedLatencySeconds * Math.Max(0, inputs.LatencyCostPerSecondUsd) * batchSize
-            : 0d;
+            : double.NaN;
+        var latencyCostCharged = model.HasLatencyData ? expectedLatencyCost : 0d;
+
+        // Partial credit on the upside, mirroring the failure split below. A pass is subdivided into
+        // a fully-correct "good" outcome (full value) and a degraded-but-acceptable one (reduced
+        // value). The good-share is the user's base assumption tilted by this model's headroom above
+        // the bar: singleAttemptSuccess - 0.5 lands in [-0.5, +0.5], so a comfortable model realizes
+        // more good outcomes than a marginal one with the same pass rate. This is what makes the
+        // feature move rankings rather than scale every model identically. Acceptable value is floored
+        // at 0 and not allowed to exceed the good value (acceptable is by definition no better than
+        // good); the resulting blended value is what each success is actually worth.
+        var baseGoodShare = Math.Clamp(inputs.GoodOutcomeShareOfSuccesses / 100d, 0, 1);
+        var realizedGoodShare = Math.Clamp(baseGoodShare + qualityHeadroom * QualityShareDifficultyTilt, 0, 1);
+        var goodValue = inputs.BusinessValuePerSuccessUsd;
+        var acceptableValue = Math.Clamp(inputs.AcceptableValuePerSuccessUsd, 0, goodValue);
+        var blendedValuePerSuccess = goodValue * realizedGoodShare + acceptableValue * (1 - realizedGoodShare);
 
         // Expected value retains the asymmetric framing: business value of a success minus direct
         // cost minus latency cost minus the cost of failure. Failure cost is now split: the critical
@@ -525,8 +644,9 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
         // BenignFailureCostUsd (caught/retried, usually cheap). criticalFailureRate already carries
         // every guardrail multiplier (silent-failure, deterministic validation, human approval, the
         // category exposure terms), so those controls now move EV directly, not just the advisory
-        // downside metric. The benign rate is whatever failure mass is left after the critical part,
-        // floored at 0 in case the multipliers ever push the critical rate above raw failure.
+        // downside metric. The benign rate is whatever failure mass is left after the critical part;
+        // the cap on criticalFailureRate above guarantees this is non-negative, so the Max(0, ...) is
+        // belt-and-suspenders.
         var benignFailureRate = Math.Max(0, (1 - effectiveSuccess) - criticalFailureRate);
         var expectedCriticalFailureCost = model.HasCostData
             ? inputs.FailureCostUsd * criticalFailureRate * batchSize
@@ -536,9 +656,9 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
             : double.NaN;
 
         var expectedValue = model.HasCostData
-            ? inputs.BusinessValuePerSuccessUsd * effectiveSuccess * batchSize
+            ? blendedValuePerSuccess * effectiveSuccess * batchSize
               - expectedTotalDirectCost
-              - expectedLatencyCost
+              - latencyCostCharged
               - expectedCriticalFailureCost
               - expectedBenignFailureCost
             : double.NaN;
@@ -604,6 +724,8 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
             ExpectedRetryOverheadUsd = expectedRetryOverhead,
             ExpectedTotalDirectCostUsd = expectedTotalDirectCost,
             CostPerSuccessfulTaskUsd = costPerSuccessfulTask,
+            RealizedGoodOutcomeShare = realizedGoodShare,
+            BlendedValuePerSuccessUsd = blendedValuePerSuccess,
             ExpectedValuePerTaskUsd = expectedValue,
             MonthlyExpectedValueUsd = monthlyExpectedValue,
             ExpectedCriticalFailureCostUsd = expectedCriticalFailureCost,
@@ -671,14 +793,14 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
             return 1;
         }
 
-        // Each additional attempt contributes with diminishing independence. correlationDecay = 0.6
-        // means the 2nd attempt is worth 0.6 of an independent try, the 3rd 0.36, etc.
-        const double correlationDecay = 0.6;
+        // Each additional attempt contributes with diminishing independence. RetryCorrelationDecay
+        // = 0.6 means the 2nd attempt is worth 0.6 of an independent try, the 3rd 0.36, etc. The
+        // same constant drives ExpectedAttempts so success and cost share one retry model.
         var effective = 1d;
         var weight = 1d;
         for (var i = 1; i < attempts; i++)
         {
-            weight *= correlationDecay;
+            weight *= RetryCorrelationDecay;
             effective += weight;
         }
 
@@ -851,11 +973,41 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
 
     private static double Sigmoid(double x) => 1d / (1d + Math.Exp(-x));
 
-    private static double ExpectedAttempts(double singleAttemptSuccess, int maxAttempts)
+    /// <summary>
+    /// Expected number of attempts per task under the correlated-retry model, including the
+    /// systematic error floor.
+    /// </summary>
+    /// <remarks>
+    /// CHANGED. Previously the independent geometric formula (1 - failure^N) / p, which treated
+    /// every retry as a fresh coin flip while <see cref="EffectiveIndependentAttempts"/> was
+    /// already discounting the *success* of those same retries for correlation -- optimistic cost
+    /// charged against pessimistic success, from two different retry models. Both sides of the
+    /// ledger now share one model: the probability a task is still unresolved after k attempts is
+    /// floor + (1 - floor) * capabilityFailure^E_k, where E_k is the effective number of
+    /// independent attempts among the first k nominal ones (E_1 = 1, E_2 = 1 + decay, ...).
+    /// Expected attempts is the sum of those survival probabilities over the allowed attempts,
+    /// and 1 minus the final survival term is exactly the effectiveSuccess computed in
+    /// AnalyzeModel. Correlated retries burn more attempts than independent ones, so this raises
+    /// expected cost and latency for marginal models, consistent with their discounted success.
+    /// </remarks>
+    private static double ExpectedAttempts(double capabilitySuccess, int maxAttempts)
     {
-        singleAttemptSuccess = Math.Clamp(singleAttemptSuccess, 0.000001, 0.999999);
-        var failure = 1 - singleAttemptSuccess;
-        return (1 - Math.Pow(failure, maxAttempts)) / singleAttemptSuccess;
+        capabilitySuccess = Math.Clamp(capabilitySuccess, 0.000001, 0.999999);
+        var capabilityFailure = 1 - capabilitySuccess;
+
+        var expected = 0d;
+        var effectiveAttemptsSoFar = 0d;
+        var nextAttemptWeight = 1d;
+
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            // Survival probability entering this attempt; the first term is always 1.
+            expected += BaseErrorFloorRate + (1 - BaseErrorFloorRate) * Math.Pow(capabilityFailure, effectiveAttemptsSoFar);
+            effectiveAttemptsSoFar += nextAttemptWeight;
+            nextAttemptWeight *= RetryCorrelationDecay;
+        }
+
+        return expected;
     }
 
     private static string BuildRecommendationReason(

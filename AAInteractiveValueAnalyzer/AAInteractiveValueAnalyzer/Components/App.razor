@@ -15,11 +15,11 @@
     <meta name="keywords" content="LLM, ROI, EV, Calculator, AI, Machine Learning, tokens, AI value, model selection, model evaluation, evaluation, Large Language Models, Artificial Intelligence, Artifical Analysis">
     <ImportMap />
     <link rel="icon" type="image/jpeg" href="LlmRoiCalc-icon.jpg" />
-    <HeadOutlet @rendermode="InteractiveWebAssembly" />
+    <HeadOutlet @rendermode="new InteractiveWebAssemblyRenderMode()" />
 </head>
 
 <body>
-    <Routes @rendermode="InteractiveWebAssembly" />
+    <Routes @rendermode="new InteractiveWebAssemblyRenderMode(false)" />
     <script>
         window.aaInteractiveValueAnalyzer = {
             downloadTextFile: function (fileName, content, contentType) {

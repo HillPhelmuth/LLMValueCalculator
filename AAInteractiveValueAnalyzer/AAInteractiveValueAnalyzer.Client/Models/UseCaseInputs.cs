@@ -43,6 +43,29 @@ public sealed class UseCaseInputs
 
     public double BusinessValuePerSuccessUsd { get; set; } = 0.5;
 
+    // Partial credit -- the upside mirror of the failure split below. A task that does not fail is
+    // not necessarily worth full value: many workloads (summarization, research, extraction) degrade
+    // rather than fail cleanly, producing output that is usable but not fully correct. So a *passing*
+    // task is subdivided into a "good" outcome worth BusinessValuePerSuccessUsd and an "acceptable"
+    // (degraded-but-usable) outcome worth AcceptableValuePerSuccessUsd. This only redistributes value
+    // *within* the success mass; failure (1 - success) is still owned entirely by the failure terms,
+    // so the two splits compose without overlap.
+    //
+    // AcceptableValuePerSuccessUsd is the value of a degraded-but-acceptable pass. Defaults to half of
+    // the full value: usable, but materially worth less than a fully-correct answer. Raise it toward
+    // BusinessValuePerSuccessUsd for tasks where "acceptable" is nearly as good as "good"; lower it
+    // toward the benign-failure cost for tasks where a degraded answer is barely better than a miss.
+    public double AcceptableValuePerSuccessUsd { get; set; } = 0.25;
+
+    // GoodOutcomeShareOfSuccesses is the baseline fraction of passes that are fully correct rather
+    // than merely acceptable, as a percentage. The *realized* good-share is tilted around this value
+    // by each model's headroom above the difficulty bar (see RecommendationEngine
+    // .QualityShareDifficultyTilt): models that clear the task comfortably realize a higher good-share
+    // than models that barely clear it, which is what lets this feature move the ranking instead of
+    // applying a flat haircut. At 100 every pass is treated as fully good and value reduces to the old
+    // flat BusinessValuePerSuccessUsd * success model (before the per-model tilt).
+    public double GoodOutcomeShareOfSuccesses { get; set; } = 80;
+
     // Failure is no longer charged as a single flat penalty. A failed task is either *critical*
     // (genuinely harmful: a customer saw a wrong answer, an irreversible action fired, a silent
     // error propagated) or *benign* (caught and retried, or otherwise cheap). The engine already
@@ -82,10 +105,44 @@ public sealed class UseCaseInputs
 
     public bool RetriesAllowed { get; set; } = true;
     public int MaxAttempts { get; set; } = 2;
-
+    public bool HasChanged(UseCaseInputs other)
+    {
+        return TaskCategory != other.TaskCategory ||
+               Math.Abs(BaseDifficulty - other.BaseDifficulty) > 0.00001 ||
+               ContextRequirement != other.ContextRequirement ||
+               ReasoningDepth != other.ReasoningDepth ||
+               DomainSpecificity != other.DomainSpecificity ||
+               ToolUse != other.ToolUse ||
+               Verifiability != other.Verifiability ||
+               OutputConstraint != other.OutputConstraint ||
+               DifficultySensitivity != other.DifficultySensitivity ||
+               HasRepresentativeEvalSet != other.HasRepresentativeEvalSet ||
+               EvalSetSize != other.EvalSetSize ||
+               HasDeterministicValidation != other.HasDeterministicValidation ||
+               HasRagOrDomainContext != other.HasRagOrDomainContext ||
+               RequiresStrictStructuredOutput != other.RequiresStrictStructuredOutput ||
+               HasSilentFailureRisk != other.HasSilentFailureRisk ||
+               CustomerFacing != other.CustomerFacing ||
+               HumanApprovalForHighRiskActions != other.HumanApprovalForHighRiskActions ||
+               Math.Abs(RequiredSuccessRate - other.RequiredSuccessRate) > 0.00001 ||
+               Math.Abs(AllowedCriticalFailureRate - other.AllowedCriticalFailureRate) > 0.00001 ||
+               Math.Abs(CriticalFailureShareOfFailures - other.CriticalFailureShareOfFailures) > 0.00001 ||
+               Math.Abs(BusinessValuePerSuccessUsd - other.BusinessValuePerSuccessUsd) > 0.00001 ||
+               Math.Abs(FailureCostUsd - other.FailureCostUsd) > 0.00001 ||
+               Math.Abs(BenignFailureCostUsd - other.BenignFailureCostUsd) > 0.00001 ||
+               Math.Abs(HumanReviewCostUsd - other.HumanReviewCostUsd) > 0.00001 ||
+               Math.Abs(OperationalRetryCostUsd - other.OperationalRetryCostUsd) > 0.00001 ||
+               Math.Abs(MonthlyVolume - other.MonthlyVolume) > 0.00001 ||
+               Math.Abs(CostMultiplier - other.CostMultiplier) > 0.00001 ||
+               Math.Abs(LatencyCostPerSecondUsd - other.LatencyCostPerSecondUsd) > 0.00001 ||
+               Math.Abs(MaxAcceptableLatencySeconds - other.MaxAcceptableLatencySeconds) > 0.00001 ||
+               RetriesAllowed != other.RetriesAllowed ||
+               MaxAttempts != other.MaxAttempts;
+    }
     public void ApplyCategoryDefaults(TaskCategoryProfile profile)
     {
         TaskCategory = profile.Category;
+        Console.WriteLine($"Applying defaults for task category: {profile.Category}");
         LastAppliedTaskCategory = profile.Category;
 
         if (profile.DefaultBaseDifficulty is { } baseDifficulty)

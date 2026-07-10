@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Markdig;
+// ReSharper disable ClassNeverInstantiated.Global
 
 namespace AAInteractiveValueAnalyzer.Client.Pages;
 public partial class IntroInfo
