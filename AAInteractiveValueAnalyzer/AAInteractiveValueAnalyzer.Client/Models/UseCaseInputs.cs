@@ -1,162 +1,63 @@
-using AAInteractiveValueAnalyzer.Client.Services;
-
 namespace AAInteractiveValueAnalyzer.Client.Models;
 
+/// <summary>
+/// User-controlled workload, risk, and economic assumptions.
+/// Percent properties use the user-facing 0-100 scale.
+/// </summary>
 public sealed class UseCaseInputs
 {
-    public UseCaseInputs(bool preventDefaults = false)
-    {
-        if (preventDefaults)
-        {
-            return;
-        }
-
-        var profile = RecommendationEngine.ResolveTaskCategoryProfile(TaskCategory);
-        ApplyCategoryDefaults(profile);
-    }
-
-    public string UseCaseName { get; set; } = "Support-ticket analysis";
-    public TaskCategoryOption TaskCategory { get; set; } = TaskCategoryOption.ClassificationRouting;
-    public TaskCategoryOption LastAppliedTaskCategory { get; set; } = TaskCategoryOption.ClassificationRouting;
-
-    public double BaseDifficulty { get; set; }
-    public ContextRequirementOption ContextRequirement { get; set; }
-    public ReasoningDepthOption ReasoningDepth { get; set; }
-    public DomainSpecificityOption DomainSpecificity { get; set; } = DomainSpecificityOption.GeneralKnowledge;
-    public ToolUseOption ToolUse { get; set; }
-    public VerifiabilityOption Verifiability { get; set; }
-    public OutputConstraintOption OutputConstraint { get; set; }
+    public string UseCaseName { get; set; } = "Example workload";
+    public TaskCategoryOption TaskCategory { get; set; } = TaskCategoryOption.SimpleRag;
+    public TaskCategoryOption LastAppliedTaskCategory { get; set; } = TaskCategoryOption.SimpleRag;
     public DifficultySensitivityOption DifficultySensitivity { get; set; } = DifficultySensitivityOption.Normal;
+    public double BaseDifficulty { get; set; } = 20;
+    public ContextRequirementOption ContextRequirement { get; set; } = ContextRequirementOption.MediumMostlyRelevant;
+    public ReasoningDepthOption ReasoningDepth { get; set; } = ReasoningDepthOption.Light;
+    public DomainSpecificityOption DomainSpecificity { get; set; } = DomainSpecificityOption.GeneralKnowledge;
+    public ToolUseOption ToolUse { get; set; } = ToolUseOption.None;
+    public VerifiabilityOption Verifiability { get; set; } = VerifiabilityOption.MostlyVerifiableByReviewer;
+    public OutputConstraintOption OutputConstraint { get; set; } = OutputConstraintOption.FreeText;
 
-    public bool HasRepresentativeEvalSet { get; set; } = true;
+    public bool HasRepresentativeEvalSet { get; set; }
     public int EvalSetSize { get; set; } = 100;
-    public bool HasDeterministicValidation { get; set; } = true;
-    public bool HasRagOrDomainContext { get; set; } = true;
-    public bool RequiresStrictStructuredOutput { get; set; } = true;
-    public bool HasSilentFailureRisk { get; set; } = false;
-    public bool CustomerFacing { get; set; } = false;
-    public bool HumanApprovalForHighRiskActions { get; set; } = false;
-
-    public double RequiredSuccessRate { get; set; } = 95;
-    public double AllowedCriticalFailureRate { get; set; } = 2;
-    public double CriticalFailureShareOfFailures { get; set; } = 20;
-
-    public double BusinessValuePerSuccessUsd { get; set; } = 0.5;
-
-    // Partial credit -- the upside mirror of the failure split below. A task that does not fail is
-    // not necessarily worth full value: many workloads (summarization, research, extraction) degrade
-    // rather than fail cleanly, producing output that is usable but not fully correct. So a *passing*
-    // task is subdivided into a "good" outcome worth BusinessValuePerSuccessUsd and an "acceptable"
-    // (degraded-but-usable) outcome worth AcceptableValuePerSuccessUsd. This only redistributes value
-    // *within* the success mass; failure (1 - success) is still owned entirely by the failure terms,
-    // so the two splits compose without overlap.
-    //
-    // AcceptableValuePerSuccessUsd is the value of a degraded-but-acceptable pass. Defaults to half of
-    // the full value: usable, but materially worth less than a fully-correct answer. Raise it toward
-    // BusinessValuePerSuccessUsd for tasks where "acceptable" is nearly as good as "good"; lower it
-    // toward the benign-failure cost for tasks where a degraded answer is barely better than a miss.
-    public double AcceptableValuePerSuccessUsd { get; set; } = 0.25;
-
-    // GoodOutcomeShareOfSuccesses is the baseline fraction of passes that are fully correct rather
-    // than merely acceptable, as a percentage. The *realized* good-share is tilted around this value
-    // by each model's headroom above the difficulty bar (see RecommendationEngine
-    // .QualityShareDifficultyTilt): models that clear the task comfortably realize a higher good-share
-    // than models that barely clear it, which is what lets this feature move the ranking instead of
-    // applying a flat haircut. At 100 every pass is treated as fully good and value reduces to the old
-    // flat BusinessValuePerSuccessUsd * success model (before the per-model tilt).
-    public double GoodOutcomeShareOfSuccesses { get; set; } = 80;
-
-    // Failure is no longer charged as a single flat penalty. A failed task is either *critical*
-    // (genuinely harmful: a customer saw a wrong answer, an irreversible action fired, a silent
-    // error propagated) or *benign* (caught and retried, or otherwise cheap). The engine already
-    // computes the critical share of failures and every guardrail multiplier acts on it, so the two
-    // costs are priced separately and the asymmetric-cost philosophy actually moves the ranking
-    // instead of only the advisory WorstCaseFailureCostUsd metric.
-    //
-    // FailureCostUsd is the cost of a *critical* failure. (Name retained for compatibility; it has
-    // always been the unit cost behind WorstCaseFailureCostUsd, which is FailureCostUsd x critical
-    // rate.) This is the expensive tail and is usually the larger of the two.
-    public double FailureCostUsd { get; set; } = 0.5;
-
-    // BenignFailureCostUsd is the cost of a non-critical failure: the retry/throwaway cost of a task
-    // that failed but was caught. Defaults equal to FailureCostUsd so that, until a user
-    // distinguishes them, total failure cost is FailureCostUsd x (1 - success) -- numerically
-    // identical to the old single-term model. Lower it to express that benign failures are cheap.
-    public double BenignFailureCostUsd { get; set; } = 0.5;
-
-    public double HumanReviewCostUsd { get; set; } = 0;
-    public double OperationalRetryCostUsd { get; set; } = 0;
-    public int MonthlyVolume { get; set; } = 1;
-    public double CostMultiplier { get; set; } = 1.0;
-
-    // Latency. Two channels, mirroring how success has both an EV contribution and a hard gate.
-    // Both default to latency-neutral so existing analyses are unchanged until a user opts in.
-    //
-    // LatencyCostPerSecondUsd: soft cost. The dollar value of a second of wall-clock per task. For
-    // interactive / customer-facing work this is the cost of a user waiting; leave at 0 for batch
-    // work where nobody is blocked on any single task. Multiplied by expected end-to-end seconds
-    // and expected attempts inside the engine, so a model that retries waits twice.
-    public double LatencyCostPerSecondUsd { get; set; } = 0;
-
-    // MaxAcceptableLatencySeconds: hard gate. A model whose expected end-to-end time exceeds this is
-    // ineligible regardless of quality or cost, the same way a model below RequiredSuccessRate is.
-    // Default is effectively "no ceiling". Models with no latency data are never gated out.
-    public double MaxAcceptableLatencySeconds { get; set; } = double.PositiveInfinity;
-
+    public bool HasDeterministicValidation { get; set; }
+    public bool HasRagOrDomainContext { get; set; }
+    public bool RequiresStrictStructuredOutput { get; set; }
+    public bool HasSilentFailureRisk { get; set; } = true;
+    public bool CustomerFacing { get; set; }
+    public bool HumanApprovalForHighRiskActions { get; set; }
     public bool RetriesAllowed { get; set; } = true;
     public int MaxAttempts { get; set; } = 2;
-    public bool HasChanged(UseCaseInputs other)
-    {
-        return TaskCategory != other.TaskCategory ||
-               Math.Abs(BaseDifficulty - other.BaseDifficulty) > 0.00001 ||
-               ContextRequirement != other.ContextRequirement ||
-               ReasoningDepth != other.ReasoningDepth ||
-               DomainSpecificity != other.DomainSpecificity ||
-               ToolUse != other.ToolUse ||
-               Verifiability != other.Verifiability ||
-               OutputConstraint != other.OutputConstraint ||
-               DifficultySensitivity != other.DifficultySensitivity ||
-               HasRepresentativeEvalSet != other.HasRepresentativeEvalSet ||
-               EvalSetSize != other.EvalSetSize ||
-               HasDeterministicValidation != other.HasDeterministicValidation ||
-               HasRagOrDomainContext != other.HasRagOrDomainContext ||
-               RequiresStrictStructuredOutput != other.RequiresStrictStructuredOutput ||
-               HasSilentFailureRisk != other.HasSilentFailureRisk ||
-               CustomerFacing != other.CustomerFacing ||
-               HumanApprovalForHighRiskActions != other.HumanApprovalForHighRiskActions ||
-               Math.Abs(RequiredSuccessRate - other.RequiredSuccessRate) > 0.00001 ||
-               Math.Abs(AllowedCriticalFailureRate - other.AllowedCriticalFailureRate) > 0.00001 ||
-               Math.Abs(CriticalFailureShareOfFailures - other.CriticalFailureShareOfFailures) > 0.00001 ||
-               Math.Abs(BusinessValuePerSuccessUsd - other.BusinessValuePerSuccessUsd) > 0.00001 ||
-               Math.Abs(FailureCostUsd - other.FailureCostUsd) > 0.00001 ||
-               Math.Abs(BenignFailureCostUsd - other.BenignFailureCostUsd) > 0.00001 ||
-               Math.Abs(HumanReviewCostUsd - other.HumanReviewCostUsd) > 0.00001 ||
-               Math.Abs(OperationalRetryCostUsd - other.OperationalRetryCostUsd) > 0.00001 ||
-               Math.Abs(MonthlyVolume - other.MonthlyVolume) > 0.00001 ||
-               Math.Abs(CostMultiplier - other.CostMultiplier) > 0.00001 ||
-               Math.Abs(LatencyCostPerSecondUsd - other.LatencyCostPerSecondUsd) > 0.00001 ||
-               Math.Abs(MaxAcceptableLatencySeconds - other.MaxAcceptableLatencySeconds) > 0.00001 ||
-               RetriesAllowed != other.RetriesAllowed ||
-               MaxAttempts != other.MaxAttempts;
-    }
+
+    public double RequiredSuccessRate { get; set; } = 90;
+    public double AllowedCriticalFailureRate { get; set; } = 1;
+    public double CriticalFailureShareOfFailures { get; set; } = 25;
+    public double CostMultiplier { get; set; } = 1;
+    public double BusinessValuePerSuccessUsd { get; set; } = 2;
+    public double AcceptableValuePerSuccessUsd { get; set; } = 1;
+    public double GoodOutcomeShareOfSuccesses { get; set; } = 75;
+    public double FailureCostUsd { get; set; } = 10;
+    public double BenignFailureCostUsd { get; set; } = 0.25;
+    public double HumanReviewCostUsd { get; set; }
+    public double OperationalRetryCostUsd { get; set; } = 0.02;
+    public double MonthlyVolume { get; set; } = 10;
+    public double LatencyCostPerSecondUsd { get; set; }
+    public double MaxAcceptableLatencySeconds { get; set; } = double.PositiveInfinity;
+
     public void ApplyCategoryDefaults(TaskCategoryProfile profile)
     {
-        TaskCategory = profile.Category;
-        Console.WriteLine($"Applying defaults for task category: {profile.Category}");
-        LastAppliedTaskCategory = profile.Category;
-
-        if (profile.DefaultBaseDifficulty is { } baseDifficulty)
+        if (profile.Category != TaskCategory)
         {
-            BaseDifficulty = baseDifficulty;
+            throw new ArgumentException("The preset category must match the selected task category.", nameof(profile));
         }
 
+        BaseDifficulty = profile.DefaultBaseDifficulty ?? BaseDifficulty;
         ContextRequirement = profile.DefaultContextRequirement ?? ContextRequirement;
         ReasoningDepth = profile.DefaultReasoningDepth ?? ReasoningDepth;
         DomainSpecificity = profile.DefaultDomainSpecificity ?? DomainSpecificity;
         ToolUse = profile.DefaultToolUse ?? ToolUse;
         Verifiability = profile.DefaultVerifiability ?? Verifiability;
         OutputConstraint = profile.DefaultOutputConstraint ?? OutputConstraint;
-
         HasRepresentativeEvalSet = profile.DefaultHasRepresentativeEvalSet ?? HasRepresentativeEvalSet;
         HasDeterministicValidation = profile.DefaultHasDeterministicValidation ?? HasDeterministicValidation;
         HasRagOrDomainContext = profile.DefaultHasRagOrDomainContext ?? HasRagOrDomainContext;
@@ -165,14 +66,7 @@ public sealed class UseCaseInputs
         CustomerFacing = profile.DefaultCustomerFacing ?? CustomerFacing;
         HumanApprovalForHighRiskActions = profile.DefaultHumanApprovalForHighRiskActions ?? HumanApprovalForHighRiskActions;
         RetriesAllowed = profile.DefaultRetriesAllowed ?? RetriesAllowed;
-
-        if (profile.DefaultMaxAttempts is { } maxAttempts)
-        {
-            MaxAttempts = maxAttempts;
-        }
-        else if (!RetriesAllowed)
-        {
-            MaxAttempts = 1;
-        }
+        MaxAttempts = profile.DefaultMaxAttempts ?? MaxAttempts;
+        LastAppliedTaskCategory = TaskCategory;
     }
 }

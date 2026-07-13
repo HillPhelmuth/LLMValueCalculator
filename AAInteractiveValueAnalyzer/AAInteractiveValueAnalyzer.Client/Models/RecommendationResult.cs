@@ -2,7 +2,9 @@ namespace AAInteractiveValueAnalyzer.Client.Models;
 
 public sealed class RecommendationResult
 {
-    public ModelProfile Model { get; init; } = default!;
+    public required ModelProfile Model { get; init; }
+    public required string CapabilityIndexName { get; init; }
+    public double RawCapabilityScore { get; init; }
     public double EffectiveDifficulty { get; init; }
     public double Tau { get; init; }
     public double AdjustedIntelligence { get; init; }
@@ -18,7 +20,10 @@ public sealed class RecommendationResult
     public double CostPerSuccessfulTaskUsd { get; init; }
     public double RealizedGoodOutcomeShare { get; init; }
     public double BlendedValuePerSuccessUsd { get; init; }
+
+    /// <summary>Expected value for the engine's 1,000-task analysis batch.</summary>
     public double ExpectedValuePerTaskUsd { get; init; }
+
     public double MonthlyExpectedValueUsd { get; init; }
     public double ExpectedCriticalFailureCostUsd { get; init; }
     public double ExpectedBenignFailureCostUsd { get; init; }
@@ -27,7 +32,7 @@ public sealed class RecommendationResult
     public double ExpectedLatencyCostUsd { get; init; }
     public double SuccessPerDollar { get; init; }
     public bool IsEligible { get; init; }
-    public List<string> ExclusionReasons { get; init; } = [];
+    public IReadOnlyList<string> ExclusionReasons { get; init; } = [];
     public string RecommendationReason { get; init; } = string.Empty;
 }
 

@@ -15,10 +15,6 @@ public static class AnalyzerHelper
     public static readonly int[] AttemptOptions = [1, 2, 3, 4, 5];
     public static readonly Dictionary<string, FieldHelp> FieldHelpContent = new(StringComparer.Ordinal)
     {
-        ["use-case-name"] = new FieldHelp(
-            "Use-case name",
-            "Names the current scenario so the recommendation and audit sections stay anchored to the workload you are modeling.",
-            "No direct calculation effect. This value is presentation-only."),
         ["task-category"] = new FieldHelp(
             "Task category",
             "Selects the closest workload family and unlocks its preset defaults plus category-specific guidance.",
@@ -46,51 +42,39 @@ public static class AnalyzerHelper
         ["verifiability"] = new FieldHelp(
             "Verifiability",
             "Measures how easy it is to tell whether an answer is correct.",
-            "Applies a percent-of-base difficulty adjustment and affects some grounding-related advice."),
+            "Applies a percent-of-base difficulty adjustment from the verifiability table."),
         ["output"] = new FieldHelp(
             "Output",
             "Defines the strictness and risk of the deliverable the model must produce.",
             "Applies a percent-of-base difficulty adjustment and influences category-specific warnings."),
-        ["eval-set-size"] = new FieldHelp(
-            "Eval set size",
-            "Counts the representative examples available for this use case.",
-            "Does not change the score directly. It changes the guardrail note when a representative eval set is enabled."),
         ["max-attempts"] = new FieldHelp(
             "Max attempts",
             "Caps the number of model tries allowed for a task when retries are enabled.",
             "Raises effective success through repeated attempts, but also increases expected attempts and direct cost."),
         ["base-difficulty"] = new FieldHelp(
             "Base difficulty",
-            "Sets the starting difficulty before workload modifiers and guardrails are applied.",
-            "Most workload and guardrail adjustments are now percentages of this normalized base value."),
-        ["representative-eval-set"] = new FieldHelp(
-            "Representative eval set",
-            "Indicates whether you have labeled examples that reflect the real workload.",
-            "No direct difficulty change. It changes audit guidance and some category warnings."),
+            "Sets the starting difficulty before workload and category adjustments are applied.",
+            "Sets the workload's baseline on the 0-100 difficulty scale. Context, reasoning, domain, tool, verifiability, output, and category adjustments are percentages of this value."),
         ["deterministic-validation"] = new FieldHelp(
             "Deterministic validation",
             "Signals that outputs can be checked programmatically instead of only by human review.",
-            $"Lowers effective difficulty by {Math.Abs(RecommendationEngine.DeterministicValidationPercent):0}% of normalized base difficulty and also reduces modeled critical-failure exposure."),
-        ["rag-domain-context"] = new FieldHelp(
-            "RAG / domain context",
-            "Signals that grounded or retrieved context is supplied to the model.",
-            $"Lowers effective difficulty by {Math.Abs(RecommendationEngine.RagOrDomainContextPercent):0}% of normalized base difficulty and reduces some grounding-related risk."),
+            $"Multiplies the modeled critical-failure rate by {RecommendationEngine.DeterministicValidationCriticalMultiplier:0.##}, reducing expected critical-failure cost and helping models satisfy the critical-failure threshold."),
         ["strict-structure"] = new FieldHelp(
             "Strict structure",
-            "Requires the output to match a schema or rigid format.",
-            $"Raises difficulty by {RecommendationEngine.StrictStructuredOutputPercent:0}% of normalized base difficulty and can improve extraction safety when paired with validation."),
+            "Requires extraction output to match a schema or rigid format.",
+            $"When paired with deterministic validation for Extraction, multiplies critical-failure exposure by {RecommendationEngine.ExtractionStrictValidationCriticalMultiplier:0.##}."),
         ["silent-failure-risk"] = new FieldHelp(
             "Silent failure risk",
             "Captures tasks where wrong answers may look plausible and escape easy detection.",
-            $"Raises difficulty by {RecommendationEngine.SilentFailureRiskPercent:0}% of normalized base difficulty and increases the modeled critical-failure share."),
+            $"Multiplies the critical share of failures by {RecommendationEngine.SilentFailureCriticalShareMultiplier:0.##}, increasing expected critical-failure cost and tightening the effective risk constraint."),
         ["customer-facing"] = new FieldHelp(
             "Customer-facing",
             "Marks outputs that are directly visible to end users or customers.",
-            $"Raises difficulty by {RecommendationEngine.CustomerFacingPercent:0}% of normalized base difficulty because presentation and trust costs matter more."),
+            $"Multiplies the critical share of failures by {RecommendationEngine.CustomerFacingCriticalShareMultiplier:0.##} to represent the greater exposure of errors delivered to customers."),
         ["human-approval"] = new FieldHelp(
             "Human approval",
             "Requires a person to approve risky actions before execution.",
-            "No direct difficulty change. It reduces modeled critical-failure exposure for high-risk actions."),
+            $"Multiplies the modeled critical-failure rate by {RecommendationEngine.HumanApprovalCriticalMultiplier:0.##}, reducing expected critical-failure cost and helping models satisfy the critical-failure threshold."),
         ["retries-allowed"] = new FieldHelp(
             "Retries allowed",
             "Determines whether the model can make more than one attempt.",
@@ -169,7 +153,7 @@ public static class AnalyzerHelper
     ];
     public static readonly IReadOnlyList<TableColumn> ComparisonColumns =
     [
-        new("intel", "Adj IQ", true),
+        new("intel", "Capability", true),
         new("aacost", "AA/1k", true),
         new("success", "Success", true),
         new("direct", "Direct/1k", true),

@@ -1,40 +1,68 @@
-using System.Net.Http.Json;
 using System.Text.Json;
-using AAInteractiveValueAnalyzer.Client.Models;
 using System.Text.Json.Serialization;
+using AAInteractiveValueAnalyzer.Client.Models;
 
 namespace AAInteractiveValueAnalyzer.Client.Services;
 
-public class ModelCatalog
+public sealed class ModelCatalog
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private readonly HttpClient _httpClient;
+    private IReadOnlyList<ModelProfile>? _cachedProfiles;
+
     public ModelCatalog(HttpClient httpClient)
     {
         _httpClient = httpClient;
     }
 
-    private static List<ModelProfile>? _cachedProfiles;
-    private HttpClient _httpClient;
-    public async Task<List<ModelProfile>> GetLatestModelData()
+    public async Task<IReadOnlyList<ModelProfile>> GetLatestModelData(CancellationToken cancellationToken = default)
     {
+        if (_cachedProfiles is { Count: > 0 })
+        {
+            return _cachedProfiles;
+        }
+
         try
         {
-            if (_cachedProfiles is { Count: > 0 }) return _cachedProfiles;
-            var jsonResponse = await _httpClient.GetStringAsync("api/models");
-            var response = JsonSerializer.Deserialize<ArtificialAnalysisModels>(jsonResponse, new JsonSerializerOptions(){PropertyNameCaseInsensitive = true});
-            var result = response.Models.Select(model => new ModelProfile(model.ModelCreator?.Name ?? "",
-                model.Name ?? "", model.Evaluations.ArtificialAnalysisIntelligenceIndex,
-                model.ArtificialAnalysisIntelligenceIndexCost?.CostPerTask?.TotalCost ?? 0, "",
-                model.Performance?.MedianEndToEndResponseTimeSeconds ?? 0,
-                model.Performance?.MedianOutputTokensPerSecond ?? 0)).ToList();
+            await using var stream = await _httpClient.GetStreamAsync("api/models", cancellationToken);
+            var response = await JsonSerializer.DeserializeAsync<ArtificialAnalysisModels>(stream, JsonOptions, cancellationToken);
+            var result = (response?.ResolvedModels ?? [])
+                .Where(HasRequiredBenchmarkData)
+                .Select(ToProfile)
+                .OrderByDescending(profile => profile.IntelligenceIndex)
+                .ThenBy(profile => profile.CostPerAaTaskUsd)
+                .ToArray();
+
+            if (result.Length == 0)
+            {
+                throw new JsonException("The model API returned no rows with both intelligence and cost data.");
+            }
+
             _cachedProfiles = result;
             return result;
         }
-        catch (Exception ex)
+        catch (Exception exception) when (exception is HttpRequestException or JsonException or TaskCanceledException)
         {
-            Console.WriteLine($"Error fetching model data: {ex}. Falling back to hard-coded data.");
-            return Models.ToList();
+            Console.Error.WriteLine($"Unable to load current model data. Using the bundled snapshot. {exception.Message}");
+            return Models;
         }
     }
+
+    private static bool HasRequiredBenchmarkData(Model model) =>
+        !string.IsNullOrWhiteSpace(model.Name)
+        && model.Evaluations?.ArtificialAnalysisIntelligenceIndex is > 0
+        && model.ArtificialAnalysisIntelligenceIndexCost?.CostPerTask?.TotalCost is > 0;
+
+    private static ModelProfile ToProfile(Model model) => new(
+        model.ModelCreator?.Name ?? string.Empty,
+        model.Name ?? string.Empty,
+        model.Evaluations!.ArtificialAnalysisIntelligenceIndex!.Value,
+        model.ArtificialAnalysisIntelligenceIndexCost!.CostPerTask!.TotalCost,
+        "Live Artificial Analysis API data.",
+        model.Performance?.MedianEndToEndResponseTimeSeconds,
+        model.Performance?.MedianOutputTokensPerSecond,
+        model.Evaluations.ArtificialAnalysisCodingIndex,
+        model.Evaluations.ArtificialAnalysisAgenticIndex);
     // Values are hard-coded from the two Artificial Analysis charts supplied with the prompt.
     // Intelligence: Artificial Analysis Intelligence Index.
     // Cost: Cost per Artificial Analysis Intelligence Index task in USD.
@@ -87,104 +115,110 @@ public class ModelCatalog
         new("OpenAI", "gpt-oss-20b (high)", 15, 0.0178, "Lowest intelligence score among listed models with lowest chart cost.", 11.97, 223.95)
     ];
 }
-public partial class ArtificialAnalysisModels
+public sealed class ArtificialAnalysisModels
 {
     [JsonPropertyName("models")]
-    public List<Model> Models { get; set; }
+    public List<Model> Models { get; init; } = [];
+
+    [JsonPropertyName("data")]
+    public List<Model> Data { get; init; } = [];
+
+    [JsonIgnore]
+    public IReadOnlyList<Model> ResolvedModels => Data.Count > 0 ? Data : Models;
 }
 
-public partial class Model
+public sealed class Model
 {
     [JsonPropertyName("id")]
-    public Guid Id { get; set; }
+    public Guid Id { get; init; }
 
     [JsonPropertyName("name")]
-    public string Name { get; set; }
+    public string? Name { get; init; }
 
     [JsonPropertyName("slug")]
-    public string Slug { get; set; }
+    public string? Slug { get; init; }
 
     [JsonPropertyName("release_date")]
-    public DateTimeOffset? ReleaseDate { get; set; }
+    public DateTimeOffset? ReleaseDate { get; init; }
 
     [JsonPropertyName("model_creator")]
-    public ModelCreator ModelCreator { get; set; }
+    public ModelCreator? ModelCreator { get; init; }
 
     [JsonPropertyName("evaluations")]
-    public Evaluations Evaluations { get; set; }
+    public Evaluations? Evaluations { get; init; }
 
     [JsonPropertyName("artificial_analysis_intelligence_index_cost")]
-    public ArtificialAnalysisIntelligenceIndexCost ArtificialAnalysisIntelligenceIndexCost { get; set; }
+    public ArtificialAnalysisIntelligenceIndexCost? ArtificialAnalysisIntelligenceIndexCost { get; init; }
 
     [JsonPropertyName("pricing")]
-    public Pricing Pricing { get; set; }
+    public Pricing? Pricing { get; init; }
 
     [JsonPropertyName("performance")]
-    public Performance Performance { get; set; }
+    public Performance? Performance { get; init; }
 }
 
-public partial class ArtificialAnalysisIntelligenceIndexCost
+public sealed class ArtificialAnalysisIntelligenceIndexCost
 {
     [JsonPropertyName("total_cost")]
-    public double TotalCost { get; set; }
+    public double? TotalCost { get; init; }
 
     [JsonPropertyName("cost_per_task")]
-    public CostPerTask CostPerTask { get; set; }
+    public CostPerTask? CostPerTask { get; init; }
 }
 
-public partial class CostPerTask
+public sealed class CostPerTask
 {
     [JsonPropertyName("total_cost")]
-    public double TotalCost { get; set; }
+    public double? TotalCost { get; init; }
 }
 
-public partial class Evaluations
+public sealed class Evaluations
 {
     [JsonPropertyName("artificial_analysis_intelligence_index")]
-    public double ArtificialAnalysisIntelligenceIndex { get; set; }
+    public double? ArtificialAnalysisIntelligenceIndex { get; init; }
 
     [JsonPropertyName("artificial_analysis_coding_index")]
-    public double ArtificialAnalysisCodingIndex { get; set; }
+    public double? ArtificialAnalysisCodingIndex { get; init; }
 
     [JsonPropertyName("artificial_analysis_agentic_index")]
-    public double ArtificialAnalysisAgenticIndex { get; set; }
+    public double? ArtificialAnalysisAgenticIndex { get; init; }
 }
 
-public partial class ModelCreator
+public sealed class ModelCreator
 {
     [JsonPropertyName("id")]
-    public Guid Id { get; set; }
+    public Guid Id { get; init; }
 
     [JsonPropertyName("name")]
-    public string Name { get; set; }
+    public string? Name { get; init; }
 }
 
-public partial class Performance
+public sealed class Performance
 {
     [JsonPropertyName("median_output_tokens_per_second")]
-    public double? MedianOutputTokensPerSecond { get; set; }
+    public double? MedianOutputTokensPerSecond { get; init; }
 
     [JsonPropertyName("median_time_to_first_token_seconds")]
-    public double? MedianTimeToFirstTokenSeconds { get; set; }
+    public double? MedianTimeToFirstTokenSeconds { get; init; }
 
     [JsonPropertyName("median_time_to_first_answer_token_seconds")]
-    public double? MedianTimeToFirstAnswerTokenSeconds { get; set; }
+    public double? MedianTimeToFirstAnswerTokenSeconds { get; init; }
 
     [JsonPropertyName("median_end_to_end_response_time_seconds")]
-    public double? MedianEndToEndResponseTimeSeconds { get; set; }
+    public double? MedianEndToEndResponseTimeSeconds { get; init; }
 }
 
-public partial class Pricing
+public sealed class Pricing
 {
     [JsonPropertyName("price_1m_input_tokens")]
-    public double Price1MInputTokens { get; set; }
+    public double? Price1MInputTokens { get; init; }
 
     [JsonPropertyName("price_1m_output_tokens")]
-    public double Price1MOutputTokens { get; set; }
+    public double? Price1MOutputTokens { get; init; }
 
     [JsonPropertyName("price_1m_cache_hit_tokens")]
-    public double? Price1MCacheHitTokens { get; set; }
+    public double? Price1MCacheHitTokens { get; init; }
 
     [JsonPropertyName("price_1m_cache_write_tokens")]
-    public double? Price1MCacheWriteTokens { get; set; }
+    public double? Price1MCacheWriteTokens { get; init; }
 }
