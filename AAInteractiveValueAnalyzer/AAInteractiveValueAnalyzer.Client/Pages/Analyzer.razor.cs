@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO;
 using System.Text;
 using AAInteractiveValueAnalyzer.Client.Models;
 using AAInteractiveValueAnalyzer.Client.Services;
@@ -11,7 +10,6 @@ namespace AAInteractiveValueAnalyzer.Client.Pages;
 
 public partial class Analyzer
 {
-    
     private enum ComparisonEligibilityFilter
     {
         All,
@@ -20,8 +18,6 @@ public partial class Analyzer
     }
 
     private UseCaseInputs Inputs { get; set; } = new();
-    private UseCaseInputs _lastInputs = new();
-    
 
     private HashSet<string> VisibleRecommendationColumns { get; set; } = CreateDefaultColumns(RecommendationColumns);
     private HashSet<string> VisibleComparisonColumns { get; set; } = CreateDefaultColumns(ComparisonColumns);
@@ -33,57 +29,57 @@ public partial class Analyzer
     private RecommendationResult? ActiveModalResult { get; set; }
     private string ActiveModalTitle { get; set; } = string.Empty;
     private string? ActiveHelpKey { get; set; }
+    private bool IsAnalyzing { get; set; }
+    private string? AnalysisError { get; set; }
+    private bool _analysisPending;
+    private ModelCatalog? _modelCatalog;
+    private RecommendationEngine? _recommendationEngine;
 
     [Inject]
     private IJSRuntime JsRuntime { get; set; } = null!;
     [Inject]
     private HttpClient Client { get; set; } = null!;
 
-    private ModelCatalog ModelCatalog
-    {
-        get
-        {
-            field ??= new ModelCatalog(Client);
-            return field;
-        }
-        
-    }
+    private ModelCatalog ModelCatalog => _modelCatalog ??= new ModelCatalog(Client);
 
-    private RecommendationEngine RecommendationEngine
-    {
-        get
-        {
-            field ??= new RecommendationEngine(ModelCatalog);
-            return field;
-        }
-    }
+    private RecommendationEngine RecommendationEngine =>
+        _recommendationEngine ??= new RecommendationEngine(ModelCatalog);
 
     private AnalysisSummary Summary { get; set; } = new();
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-            _lastInputs = Inputs;
-        if (Inputs.HasChanged(_lastInputs))
-        {
-            Console.WriteLine("Inputs have changed, updating analysis...");
-            Summary = await RecommendationEngine.Analyze(Inputs);
-            _lastInputs = Inputs;
-        }
-        else
-        {
-            Console.WriteLine("Inputs have not changed, skipping analysis.");
-        }
-    }
 
     private async Task Update()
     {
-        Summary = await RecommendationEngine.Analyze(Inputs);
+        _analysisPending = true;
+
+        if (IsAnalyzing)
+        {
+            return;
+        }
+
+        IsAnalyzing = true;
+        AnalysisError = null;
+
+        try
+        {
+            while (_analysisPending)
+            {
+                _analysisPending = false;
+                Summary = await RecommendationEngine.Analyze(Inputs);
+            }
+        }
+        catch (Exception exception)
+        {
+            AnalysisError = $"The analysis could not be refreshed: {exception.Message}";
+        }
+        finally
+        {
+            IsAnalyzing = false;
+        }
     }
 
     protected override async Task OnInitializedAsync()
     {
-        Summary = await RecommendationEngine.Analyze(Inputs);
-        await base.OnInitializedAsync();
+        await Update();
     }
 
     
@@ -112,7 +108,8 @@ public partial class Analyzer
         ? $"Apply recommended defaults? {ActiveCategoryPresetSummary}"
         : "This category does not have automatic defaults. Keep the current workload inputs or adjust them manually.";
 
-    private void ResetDefaults()
+    private int MaxRecommendations { get; set; } = 8;
+    private async Task ResetDefaults()
     {
         Inputs = new UseCaseInputs();
         ActiveModalResult = null;
@@ -125,9 +122,10 @@ public partial class Analyzer
         RecommendationFilterText = string.Empty;
         ComparisonFilterText = string.Empty;
         ComparisonFilter = ComparisonEligibilityFilter.All;
+        await Update();
     }
 
-    private void ApplyCategoryDefaults()
+    private async Task ApplyCategoryDefaults()
     {
         if (!ActiveTaskCategoryProfile.HasPresetDefaults)
         {
@@ -136,6 +134,7 @@ public partial class Analyzer
         }
 
         Inputs.ApplyCategoryDefaults(ActiveTaskCategoryProfile);
+        await Update();
     }
 
     private void KeepCurrentInputs()
@@ -204,9 +203,9 @@ public partial class Analyzer
         return $"Showing {filteredCount} of {summary.Results.Count} models with the current sort and filters.";
     }
 
-    private IEnumerable<RecommendationResult> GetRecommendationRows(AnalysisSummary summary)
+    private IEnumerable<RecommendationResult> GetRecommendationRows(AnalysisSummary summary, int take = 8)
     {
-        return SortRecommendationRows(GetFilteredRecommendationRows(summary)).Take(8);
+        return SortRecommendationRows(GetFilteredRecommendationRows(summary)).Take(take);
     }
 
     private IEnumerable<RecommendationResult> GetFilteredRecommendationRows(AnalysisSummary summary)
@@ -262,8 +261,8 @@ public partial class Analyzer
             "model" => sort.Descending
                 ? items.OrderByDescending(item => item.Model.DisplayName, StringComparer.CurrentCultureIgnoreCase)
                 : items.OrderBy(item => item.Model.DisplayName, StringComparer.CurrentCultureIgnoreCase),
-            "intel" => OrderBy(items, item => item.Model.AdjustedIntelligence, sort.Descending),
-            "aacost" => OrderBy(items, item => item.Model.CostPerAaTaskUsd ?? double.MaxValue, sort.Descending),
+            "intel" => OrderBy(items, item => item.AdjustedIntelligence, sort.Descending),
+            "aacost" => OrderBy(items, item => item.Model.CostPerAaTaskUsd ?? (sort.Descending ? double.NegativeInfinity : double.PositiveInfinity), sort.Descending),
             "success" => OrderBy(items, item => item.EffectiveSuccessRate, sort.Descending),
             "single" => OrderBy(items, item => item.SingleAttemptSuccessRate, sort.Descending),
             "critical" => OrderBy(items, item => item.CriticalFailureRate, sort.Descending),
@@ -271,8 +270,8 @@ public partial class Analyzer
             "modelcost" => OrderBy(items, item => item.ExpectedModelCostUsd, sort.Descending),
             "review" => OrderBy(items, item => item.ExpectedReviewCostUsd, sort.Descending),
             "retry" => OrderBy(items, item => item.ExpectedRetryOverheadUsd, sort.Descending),
-            "latency" => OrderBy(items, item => item.Model.HasLatencyData ? item.ExpectedLatencySeconds : double.MaxValue, sort.Descending),
-            "latcost" => OrderBy(items, item => item.Model.HasLatencyData ? item.ExpectedLatencyCostUsd : double.MaxValue, sort.Descending),
+            "latency" => OrderBy(items, item => item.Model.HasLatencyData ? item.ExpectedLatencySeconds : (sort.Descending ? double.NegativeInfinity : double.PositiveInfinity), sort.Descending),
+            "latcost" => OrderBy(items, item => item.Model.HasLatencyData ? item.ExpectedLatencyCostUsd : (sort.Descending ? double.NegativeInfinity : double.PositiveInfinity), sort.Descending),
             "critfail" => OrderBy(items, item => item.ExpectedCriticalFailureCostUsd, sort.Descending),
             "benignfail" => OrderBy(items, item => item.ExpectedBenignFailureCostUsd, sort.Descending),
             "direct" => OrderBy(items, item => item.ExpectedTotalDirectCostUsd, sort.Descending),
@@ -282,6 +281,9 @@ public partial class Analyzer
             "status" => sort.Descending
                 ? items.OrderByDescending(item => item.IsEligible)
                 : items.OrderBy(item => item.IsEligible),
+            "why" => sort.Descending
+                ? items.OrderByDescending(item => item.RecommendationReason, StringComparer.CurrentCultureIgnoreCase)
+                : items.OrderBy(item => item.RecommendationReason, StringComparer.CurrentCultureIgnoreCase),
             _ => OrderBy(items, item => item.ExpectedValuePerTaskUsd, sort.Descending)
         };
 
@@ -453,16 +455,7 @@ public partial class Analyzer
 
     private string BuildComparisonCsvFileName()
     {
-        var baseName = string.IsNullOrWhiteSpace(Inputs.UseCaseName)
-            ? "model-ev-calculator"
-            : Inputs.UseCaseName.Trim();
-
-        var sanitized = new string(baseName
-            .Select(character => Path.GetInvalidFileNameChars().Contains(character) ? '-' : character)
-            .ToArray())
-            .Replace(' ', '-');
-
-        return $"{sanitized.ToLowerInvariant()}-full-comparison-{DateTime.Now:yyyyMMdd-HHmmss}.csv";
+        return $"model-ev-calculator-full-comparison-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.csv";
     }
 
     private static string EscapeCsv(string value)
@@ -474,7 +467,7 @@ public partial class Analyzer
     {
         return columnKey switch
         {
-            "intel" => $"{item.Model.AdjustedIntelligence:0} (Raw {item.Model.IntelligenceIndex:0})",
+            "intel" => $"{item.AdjustedIntelligence:0.0} ({item.CapabilityIndexName})",
             "aacost" => BatchCurrency(item.Model.CostPerAaTaskUsd),
             "success" => Percent(item.EffectiveSuccessRate),
             "single" => Percent(item.SingleAttemptSuccessRate),
@@ -559,10 +552,11 @@ public partial class Analyzer
         AddPresetDetail(details, "Tool use", profile.DefaultToolUse);
         AddPresetDetail(details, "Verifiability", profile.DefaultVerifiability);
         AddPresetDetail(details, "Output", profile.DefaultOutputConstraint);
-        AddPresetFlag(details, "Eval set", profile.DefaultHasRepresentativeEvalSet, "Representative", "Not expected");
         AddPresetFlag(details, "Validation", profile.DefaultHasDeterministicValidation, "Deterministic", "Manual");
-        AddPresetFlag(details, "Grounding", profile.DefaultHasRagOrDomainContext, "RAG/context", "None");
-        AddPresetFlag(details, "Structured", profile.DefaultRequiresStrictStructuredOutput, "Strict", "Flexible");
+        if (profile.Category == TaskCategoryOption.Extraction)
+        {
+            AddPresetFlag(details, "Structured", profile.DefaultRequiresStrictStructuredOutput, "Strict", "Flexible");
+        }
         AddPresetFlag(details, "Silent risk", profile.DefaultHasSilentFailureRisk, "High", "Lower");
         AddPresetFlag(details, "Customer-facing", profile.DefaultCustomerFacing, "Yes", "No");
         AddPresetFlag(details, "Approval", profile.DefaultHumanApprovalForHighRiskActions, "Required", "Optional");
@@ -629,6 +623,7 @@ public partial class Analyzer
     {
         return
         [
+            new("Capability basis", $"{item.CapabilityIndexName}: {item.RawCapabilityScore:0.0}"),
             new("Single-attempt success", Percent(item.SingleAttemptSuccessRate)),
             new("Effective success", Percent(item.EffectiveSuccessRate)),
             new("Realized good-outcome share", Percent(item.RealizedGoodOutcomeShare)),

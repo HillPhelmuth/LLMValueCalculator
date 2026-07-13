@@ -25,11 +25,7 @@ The output should be treated as a planning estimate. Production decisions should
 
    Categories act as presets and priors. For example, extraction and classification start with lower modeled difficulty than research or agentic workflows.
 
-2. Apply or ignore the category defaults.
-
-   The app may offer recommended defaults for context size, reasoning depth, tool use, verifiability, output format, validation, and retries. Applying defaults is optional so category changes do not silently overwrite your scenario.
-
-3. Tune the workload inputs.
+2. Tune the workload inputs.
 
    Adjust the base difficulty, context, reasoning, domain specificity, tool use, verifiability, and output constraints until they describe the actual work rather than the broad category label.
 

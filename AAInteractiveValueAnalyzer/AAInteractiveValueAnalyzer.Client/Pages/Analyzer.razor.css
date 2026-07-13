@@ -6,9 +6,9 @@
     list-style: none;
 }
 
-    .calculation-audit-summary::-webkit-details-marker {
-        display: none;
-    }
+.calculation-audit-summary::-webkit-details-marker {
+    display: none;
+}
 
 .calculation-audit-chevron {
     display: inline-flex;
@@ -19,6 +19,69 @@
 }
 
 details[open] .calculation-audit-chevron {
+    transform: rotate(90deg);
+}
+
+.preset-disclosure {
+    margin-bottom: 12px;
+}
+
+.preset-disclosure .section-heading p {
+    color: var(--deck-text);
+}
+
+.preset-values-disclosure {
+    margin-top: 8px;
+}
+
+.preset-disclosure-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #fbfbfb;
+    cursor: pointer;
+    list-style: none;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.preset-disclosure-summary::-webkit-details-marker {
+    display: none;
+}
+
+.preset-disclosure-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.preset-disclosure-label-less {
+    display: none;
+}
+
+.preset-disclosure-chevron {
+    display: inline-flex;
+    font-size: 1rem;
+    line-height: 1;
+    transition: transform 0.2s ease;
+}
+
+.preset-values-disclosure[open] .preset-disclosure-label-more {
+    display: none;
+}
+
+.preset-values-disclosure[open] .preset-disclosure-label-less {
+    display: inline;
+}
+
+.preset-values-disclosure[open] .preset-disclosure-chevron {
     transform: rotate(90deg);
 }
 

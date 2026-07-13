@@ -8,6 +8,9 @@ public enum TaskCategoryOption
     [Description("Extraction")]
     Extraction,
 
+    [Description("Simple RAG")]
+    SimpleRag,
+
     [Description("Classification / routing")]
     ClassificationRouting,
 
@@ -25,8 +28,6 @@ public enum TaskCategoryOption
 
     [Description("Research / analysis")]
     ResearchAnalysis,
-    [Description("Simple RAG")]
-    SimpleRag,
 
     [Description("Other")]
     Other

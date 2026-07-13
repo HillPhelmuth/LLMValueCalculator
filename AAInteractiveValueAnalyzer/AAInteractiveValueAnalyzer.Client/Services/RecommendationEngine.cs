@@ -6,13 +6,13 @@ namespace AAInteractiveValueAnalyzer.Client.Services;
 /// Calculates task difficulty, guardrails, and model recommendations for a supplied use case.
 /// </summary>
 /// <remarks>
-/// CALIBRATION NOTE. Two scales meet inside the success model: the Artificial Analysis
-/// Intelligence Index (per model) and the modeled task difficulty (built up from the
-/// adjustment tables below). They are assumed commensurable on a shared 0-based axis after
-/// <see cref="AdjustedIntelligence(double)"/> is applied. That assumption is a *prior*, not a
-/// measurement. Until it is fitted against an eval set, every ranking this engine produces is a
+/// CALIBRATION NOTE. Two scales meet inside the success model: the category-relevant Artificial
+/// Analysis capability index and modeled task difficulty. They are assumed commensurable on a
+/// shared 0-100 axis. That is a prior, not a measurement. Until it is fitted against an eval set,
+/// every ranking this engine produces is a
 /// planning estimate. The constants most responsible for the shape of the output, and therefore
-/// the ones to fit first, are <see cref="IntelligenceCurve"/> and <see cref="TauBySensitivity"/>.
+/// the ones to fit first, are <see cref="TauBySensitivity"/>, the difficulty modifiers, and the
+/// category baselines.
 /// </remarks>
 public class RecommendationEngine(ModelCatalog modelCatalog)
 {
@@ -22,51 +22,16 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
     public const int TaskBatchSize = 1000;
 
     /// <summary>
-    /// Additional modeled difficulty applied when a task requires strict structured output.
+    /// Prior applied to the critical share of failures for output delivered directly to customers.
+    /// Customer exposure changes consequence and detection risk, not model capability.
     /// </summary>
-    public const double StrictStructuredOutputPercent = 5;
-
-    /// <summary>
-    /// Additional modeled difficulty applied when the output is customer-facing.
-    /// </summary>
-    public const double CustomerFacingPercent = 8;
-
-    /// <summary>
-    /// Additional modeled difficulty applied when silent failures would be especially costly.
-    /// </summary>
-    /// <remarks>
-    /// CHANGED. Silent-failure risk now expresses itself on a single channel. Previously it both
-    /// raised difficulty by 20% of base AND multiplied the critical-failure share by 1.5, charging
-    /// the same checkbox twice. Silent failure is fundamentally a *detection* problem, not a
-    /// *capability* problem: it does not make the task harder to do, it makes failures harder to
-    /// catch. So the entire effect now lives on the critical-failure path
-    /// (<see cref="SilentFailureCriticalShareMultiplier"/>), and the difficulty contribution is 0.
-    /// Kept as a named constant so a future fit can reintroduce a small capability term if the
-    /// data justifies it.
-    /// </remarks>
-    public const double SilentFailureRiskPercent = 0;
+    public const double CustomerFacingCriticalShareMultiplier = 1.25;
 
     /// <summary>
     /// Multiplier applied to the critical-failure share of failures when silent failures are likely.
     /// This is the sole channel for silent-failure risk.
     /// </summary>
     public const double SilentFailureCriticalShareMultiplier = 1.5;
-
-    /// <summary>
-    /// Difficulty reduction applied when deterministic validation is available.
-    /// </summary>
-    /// <remarks>
-    /// CHANGED. Deterministic validation now affects exactly one thing: the critical-failure rate
-    /// (see <see cref="DeterministicValidationCriticalMultiplier"/>). A validator does not make the
-    /// model smarter, so it should not move the success curve. Previously this single checkbox
-    /// reduced difficulty by 12%, cut critical failures by 55% (x0.45), cut Extraction exposure by
-    /// a further 15%, and flipped the code-gen residual from +4 to -4 -- four credits for one
-    /// control. The difficulty credit is now 0; the over-aggressive x0.45 is relaxed to x0.65
-    /// (validators catch schema/syntax failures, not semantic ones); and the code-gen residual no
-    /// longer special-cases this flag. The Extraction exposure interaction is retained because it
-    /// is conditioned on strict schema output as well, i.e. a genuinely different signal.
-    /// </remarks>
-    public const double DeterministicValidationPercent = 0;
 
     /// <summary>
     /// Multiplier applied to the critical-failure rate when deterministic validation is present.
@@ -81,26 +46,10 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
     public const double HumanApprovalCriticalMultiplier = 0.5;
 
     /// <summary>
-    /// Difficulty reduction applied when grounded RAG or domain context is provided.
-    /// RAG genuinely changes how hard the task is (it supplies the answer substrate), so unlike the
-    /// two flags above this legitimately belongs on the difficulty channel.
+    /// Additional critical-failure multiplier for extraction workloads that require strict
+    /// structured output and use deterministic validation.
     /// </summary>
-    public const double RagOrDomainContextPercent = -6;
-
-    /// <summary>
-    /// Additional difficulty applied to research tasks that lack grounding.
-    /// </summary>
-    public const double ResearchWithoutGroundingPercent = 4;
-
-    /// <summary>
-    /// Fraction of a user's base-difficulty override that is honored against the category baseline.
-    /// </summary>
-    /// <remarks>
-    /// CHANGED. Was a silent 0.35, which overrode an explicit user setting by 65%. Raised to 0.6 so
-    /// a deliberate override is mostly respected while the category prior still anchors. Surfaced as
-    /// a named constant so the UI can disclose the damping rather than hiding it.
-    /// </remarks>
-    public const double BaseDifficultyOverrideWeight = 0.6;
+    public const double ExtractionStrictValidationCriticalMultiplier = 0.85;
 
     /// <summary>
     /// How strongly a model's headroom above the task tilts the realized good-output share around the
@@ -162,6 +111,7 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
     /// </summary>
     public const double RetryCorrelationDecay = 0.6;
 
+    
     /// <summary>
     /// Configurable convex transform applied to the raw intelligence index before it is compared to
     /// task difficulty. The transform is deliberately convex: a gap near the top of the index
@@ -195,8 +145,11 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
         /// </summary>
         public static IntelligenceCurveConfig Default { get; } = new(
         [
-            new Segment(20, 1),
-            new Segment(40, 2),
+            new Segment(10, 1),
+            new Segment(20, 1.4),
+            new Segment(30, 1.8),
+            new Segment(40, 2.2),
+            new Segment(50,2.6),
             new Segment(double.PositiveInfinity, 3)
         ]);
     }
@@ -227,7 +180,6 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
 
         return adjusted;
     }
-
     /// <summary>
     /// Adjustments are expressed as percent of the base difficulty, so they scale with the inherent
     /// difficulty of the task. A 10% context adjustment adds 1 point at base difficulty 10, but 5
@@ -235,6 +187,7 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
     /// </summary>
     public static IReadOnlyDictionary<ContextRequirementOption, double> ContextAdjustments { get; } = new Dictionary<ContextRequirementOption, double>
     {
+        [ContextRequirementOption.None] = 0,
         [ContextRequirementOption.ShortClean] = 0,
         [ContextRequirementOption.MediumMostlyRelevant] = 5,
         [ContextRequirementOption.LargeClean] = 10,
@@ -307,12 +260,7 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
     /// <summary>
     /// The sigmoid slope used for each difficulty sensitivity setting.
     /// </summary>
-    /// <remarks>
-    /// NOTE. tau is expressed in *adjusted* intelligence units. Because the convex transform makes
-    /// adjusted units denser at the top (3x slope), a fixed tau is effectively sharper among
-    /// frontier models than among weak ones. <see cref="EffectiveTau"/> compensates by scaling tau
-    /// by the local slope at the task difficulty, so "Soft" stays soft across the whole range.
-    /// </remarks>
+    /// <remarks>Tau is expressed in published 0-100 capability-index points.</remarks>
     public static IReadOnlyDictionary<DifficultySensitivityOption, double> TauBySensitivity { get; } = new Dictionary<DifficultySensitivityOption, double>
     {
         [DifficultySensitivityOption.Soft] = 8,
@@ -346,10 +294,9 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
                 DefaultBaseDifficulty: 6,
                 DefaultContextRequirement: ContextRequirementOption.ShortClean,
                 DefaultReasoningDepth: ReasoningDepthOption.Light,
-                DefaultToolUse: ToolUseOption.None,
-                DefaultVerifiability: VerifiabilityOption.DeterministicallyTestable,
+                DefaultToolUse: ToolUseOption.OneOrTwoDeterministicTools,
+                DefaultVerifiability: VerifiabilityOption.MostlyVerifiableByReviewer,
                 DefaultOutputConstraint: OutputConstraintOption.FreeText,
-                DefaultHasRepresentativeEvalSet: true,
                 DefaultHasDeterministicValidation: false,
                 DefaultRequiresStrictStructuredOutput: false,
                 DefaultHasSilentFailureRisk: false),
@@ -393,7 +340,6 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
                 DefaultToolUse: ToolUseOption.MultipleToolsWithValidation,
                 DefaultVerifiability: VerifiabilityOption.MostlyVerifiableByReviewer,
                 DefaultOutputConstraint: OutputConstraintOption.StructuredJsonOrSchema,
-                DefaultHasRagOrDomainContext: true,
                 DefaultHasSilentFailureRisk: true),
             [TaskCategoryOption.DraftingWriting] = new(
                 Category: TaskCategoryOption.DraftingWriting,
@@ -414,7 +360,6 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
                 DefaultToolUse: ToolUseOption.MultipleToolsWithValidation,
                 DefaultVerifiability: VerifiabilityOption.HardToDetectWrongAnswers,
                 DefaultOutputConstraint: OutputConstraintOption.FreeText,
-                DefaultHasRagOrDomainContext: true,
                 DefaultHasSilentFailureRisk: true),
             [TaskCategoryOption.Other] = new(
                 Category: TaskCategoryOption.Other,
@@ -444,60 +389,37 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
         AddPercentAdjustment(difficultyFactors, "Verifiability", inputs.Verifiability, VerifiabilityAdjustments, normalizedBaseDifficulty, ref difficulty);
         AddPercentAdjustment(difficultyFactors, "Output", inputs.OutputConstraint, OutputAdjustments, normalizedBaseDifficulty, ref difficulty);
 
-        var categoryResidualPercent = GetCategoryResidualPercent(inputs, categoryProfile);
+        var categoryResidualPercent = GetCategoryResidualPercent(categoryProfile);
         ApplyPercentDelta(difficultyFactors, $"Task category: {categoryProfile.Name}", categoryResidualPercent, normalizedBaseDifficulty, ref difficulty, "category prior");
 
-        if (inputs.RequiresStrictStructuredOutput)
+        if (inputs.HasSilentFailureRisk)
         {
-            ApplyPercentDelta(difficultyFactors, "Strict structured output", StrictStructuredOutputPercent, normalizedBaseDifficulty, ref difficulty);
+            guardrailFactors.Add($"Silent-failure risk multiplies the critical share of failures by {SilentFailureCriticalShareMultiplier:0.##}.");
+        }
+
+        if (inputs.HasDeterministicValidation)
+        {
+            guardrailFactors.Add($"Deterministic validation multiplies the modeled critical-failure rate by {DeterministicValidationCriticalMultiplier:0.##}.");
         }
 
         if (inputs.CustomerFacing)
         {
-            ApplyPercentDelta(difficultyFactors, "Customer-facing output", CustomerFacingPercent, normalizedBaseDifficulty, ref difficulty);
-        }
-
-        // CHANGED: silent-failure risk no longer touches difficulty. Its entire effect is on the
-        // critical-failure share inside AnalyzeModel. We surface a guardrail note for transparency.
-        if (inputs.HasSilentFailureRisk)
-        {
-            guardrailFactors.Add("Silent-failure risk raises modeled critical-failure exposure (detection problem), not task difficulty.");
-        }
-
-        // CHANGED: deterministic validation no longer touches difficulty. Its entire effect is on the
-        // critical-failure rate inside AnalyzeModel.
-        if (inputs.HasDeterministicValidation)
-        {
-            guardrailFactors.Add("Deterministic validation reduces modeled critical-failure exposure (catches schema/syntax failures, not semantic ones).");
-        }
-
-        if (inputs.HasRagOrDomainContext)
-        {
-            ApplyPercentDelta(guardrailFactors, "RAG or supplied domain context", RagOrDomainContextPercent, normalizedBaseDifficulty, ref difficulty);
+            guardrailFactors.Add($"Customer-facing exposure multiplies the critical share of failures by {CustomerFacingCriticalShareMultiplier:0.##}.");
         }
 
         if (inputs.HumanApprovalForHighRiskActions)
         {
-            guardrailFactors.Add("Human approval reduces modeled critical-failure exposure for high-risk actions.");
+            guardrailFactors.Add($"Human approval multiplies the modeled critical-failure rate by {HumanApprovalCriticalMultiplier:0.##}.");
         }
 
-        if (inputs.HasRepresentativeEvalSet)
-        {
-            guardrailFactors.Add($"Representative eval set available: {inputs.EvalSetSize:n0} examples.");
-        }
-        else
-        {
-            guardrailFactors.Add("No representative eval set selected. Treat the recommendation as a planning prior, not a production decision. The intelligence-vs-difficulty curve is uncalibrated without one.");
-        }
+        ApplyCategoryAdjustments(inputs, categoryProfile, guardrailFactors, ref criticalFailureExposureMultiplier);
 
-        ApplyCategoryAdjustments(inputs, categoryProfile, difficultyFactors, guardrailFactors, normalizedBaseDifficulty, ref difficulty, ref criticalFailureExposureMultiplier);
-
-        difficulty = Math.Clamp(difficulty, 0, 75);
-        var tau = TauBySensitivity.TryGetValue(inputs.DifficultySensitivity, out var configuredTau) ? configuredTau : 5;
+        difficulty = Math.Clamp(difficulty, 0, 100);
+        var tau = TauBySensitivity.GetValueOrDefault(inputs.DifficultySensitivity, 5);
         var effectiveTau = EffectiveTau(tau, difficulty);
         var attempts = inputs.RetriesAllowed ? Math.Clamp(inputs.MaxAttempts, 1, 5) : 1;
-        var targetSuccess = inputs.RequiredSuccessRate / 100d;
-        var allowedCriticalFailure = inputs.AllowedCriticalFailureRate / 100d;
+        var targetSuccess = Math.Clamp(inputs.RequiredSuccessRate / 100d, 0, 1);
+        var allowedCriticalFailure = Math.Clamp(inputs.AllowedCriticalFailureRate / 100d, 0, 1);
 
         var results = (await modelCatalog.GetLatestModelData())
             .Select(model => AnalyzeModel(model, inputs, difficulty, effectiveTau, attempts, targetSuccess, allowedCriticalFailure, criticalFailureExposureMultiplier))
@@ -537,9 +459,11 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
         var reasons = new List<string>();
         const double batchSize = TaskBatchSize;
 
-        // CHANGED: the convex transform is sourced from the engine, not the model property, so the
-        // curve has a single configurable home. model.IntelligenceIndex is the raw AA index.
-        var adjustedIntelligence = AdjustedIntelligence(model.IntelligenceIndex);
+        // Use the category-specific AA index when it is available. Coding and agentic indices are
+        // published on the same scale as the composite Intelligence Index.
+        var rawCapabilityScore = AdjustedIntelligence(model.CapabilityIndexFor(inputs.TaskCategory));
+        var capabilityIndexName = model.CapabilityIndexNameFor(inputs.TaskCategory);
+        var adjustedIntelligence = AdjustedIntelligence(rawCapabilityScore);
 
         // CHANGED: success is now the product of two independent hurdles. The sigmoid models the
         // capability hurdle (can the model do the task at all); BaseErrorFloorRate models the
@@ -564,7 +488,7 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
         // retry on the same task), so the ledger charged optimistic cost against
         // correlation-discounted success -- two different retry models on the two sides.
         var expectedAttempts = ExpectedAttempts(capabilitySuccess, attempts);
-        var baseModelCost = model.CostPerAaTaskUsd.GetValueOrDefault() * inputs.CostMultiplier;
+        var baseModelCost = model.CostPerAaTaskUsd.GetValueOrDefault() * Math.Max(0, inputs.CostMultiplier);
         var expectedModelCost = model.HasCostData ? baseModelCost * expectedAttempts * batchSize : double.NaN;
         var expectedReviewCost = Math.Max(0, inputs.HumanReviewCostUsd) * batchSize;
         var expectedRetryOverhead = Math.Max(0, expectedAttempts - 1) * Math.Max(0, inputs.OperationalRetryCostUsd) * batchSize;
@@ -582,6 +506,11 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
         if (inputs.HasSilentFailureRisk)
         {
             criticalFailureShare = Math.Min(1, criticalFailureShare * SilentFailureCriticalShareMultiplier);
+        }
+
+        if (inputs.CustomerFacing)
+        {
+            criticalFailureShare = Math.Min(1, criticalFailureShare * CustomerFacingCriticalShareMultiplier);
         }
 
         var criticalFailureRate = (1 - effectiveSuccess) * criticalFailureShare * criticalFailureExposureMultiplier;
@@ -634,7 +563,7 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
         // good); the resulting blended value is what each success is actually worth.
         var baseGoodShare = Math.Clamp(inputs.GoodOutcomeShareOfSuccesses / 100d, 0, 1);
         var realizedGoodShare = Math.Clamp(baseGoodShare + qualityHeadroom * QualityShareDifficultyTilt, 0, 1);
-        var goodValue = inputs.BusinessValuePerSuccessUsd;
+        var goodValue = Math.Max(0, inputs.BusinessValuePerSuccessUsd);
         var acceptableValue = Math.Clamp(inputs.AcceptableValuePerSuccessUsd, 0, goodValue);
         var blendedValuePerSuccess = goodValue * realizedGoodShare + acceptableValue * (1 - realizedGoodShare);
 
@@ -649,7 +578,7 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
         // belt-and-suspenders.
         var benignFailureRate = Math.Max(0, (1 - effectiveSuccess) - criticalFailureRate);
         var expectedCriticalFailureCost = model.HasCostData
-            ? inputs.FailureCostUsd * criticalFailureRate * batchSize
+            ? Math.Max(0, inputs.FailureCostUsd) * criticalFailureRate * batchSize
             : double.NaN;
         var expectedBenignFailureCost = model.HasCostData
             ? Math.Max(0, inputs.BenignFailureCostUsd) * benignFailureRate * batchSize
@@ -706,11 +635,13 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
         }
 
         var isEligible = reasons.Count == 0;
-        var recommendationReason = BuildRecommendationReason(model, expectedValue, effectiveSuccess, expectedTotalDirectCost, costPerSuccessfulTask, criticalFailureRate, isEligible, reasons);
+        var recommendationReason = BuildRecommendationReason(expectedValue, effectiveSuccess, expectedTotalDirectCost, costPerSuccessfulTask, criticalFailureRate, isEligible, reasons);
 
         return new RecommendationResult
         {
             Model = model,
+            CapabilityIndexName = capabilityIndexName,
+            RawCapabilityScore = rawCapabilityScore,
             EffectiveDifficulty = difficulty,
             Tau = tau,
             AdjustedIntelligence = adjustedIntelligence,
@@ -847,12 +778,12 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
             return true;
         }
 
-        profile = TaskCategoryProfiles[TaskCategoryOption.Other];
+        profile = TaskCategoryProfiles[TaskCategoryOption.SimpleRag];
         return false;
     }
 
     /// <summary>
-    /// Resolves a task category profile, falling back to the <see cref="TaskCategoryOption.Other"/> profile when needed.
+    /// Resolves a task category profile, falling back to the <see cref="TaskCategoryOption.SimpleRag"/> profile when needed.
     /// </summary>
     public static TaskCategoryProfile ResolveTaskCategoryProfile(TaskCategoryOption category)
     {
@@ -860,7 +791,7 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
         return profile;
     }
 
-    private static double GetCategoryResidualPercent(UseCaseInputs inputs, TaskCategoryProfile profile)
+    private static double GetCategoryResidualPercent(TaskCategoryProfile profile)
     {
         // CHANGED: the code-gen residual no longer special-cases deterministic validation. That
         // credit now lives solely on the critical-failure channel (see DeterministicValidation
@@ -870,34 +801,17 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
 
     private static double NormalizeBaseDifficulty(double selectedBaseDifficulty, TaskCategoryProfile profile, out string factor)
     {
-        if (profile.DefaultBaseDifficulty is not { } categoryBaseline)
-        {
-            factor = $"Base difficulty: {selectedBaseDifficulty:0.0}";
-            return selectedBaseDifficulty;
-        }
-
-        var overrideDelta = selectedBaseDifficulty - categoryBaseline;
-        var normalizedBaseDifficulty = categoryBaseline + (overrideDelta * BaseDifficultyOverrideWeight);
-
-        if (Math.Abs(overrideDelta) < 0.05)
-        {
-            factor = $"Base difficulty: {categoryBaseline:0.0} category baseline";
-            return normalizedBaseDifficulty;
-        }
-
-        // CHANGED: disclose the damping weight so the user can see why their override moved less than
-        // they set it.
-        factor = $"Base difficulty: {normalizedBaseDifficulty:0.0} ({selectedBaseDifficulty:0.0} selected, {categoryBaseline:0.0} category baseline, override honored at {BaseDifficultyOverrideWeight:P0})";
-        return normalizedBaseDifficulty;
+        var normalized = Math.Clamp(selectedBaseDifficulty, 0, 100);
+        factor = profile.DefaultBaseDifficulty is { } categoryBaseline
+            ? $"Base difficulty: {normalized:0.0} (category preset baseline {categoryBaseline:0.0}; explicit user value is fully honored)"
+            : $"Base difficulty: {normalized:0.0}";
+        return normalized;
     }
 
     private static void ApplyCategoryAdjustments(
         UseCaseInputs inputs,
         TaskCategoryProfile profile,
-        List<string> difficultyFactors,
         List<string> guardrailFactors,
-        double baseDifficulty,
-        ref double difficulty,
         ref double criticalFailureExposureMultiplier)
     {
         switch (profile.Category)
@@ -907,21 +821,13 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
                 {
                     // Retained: conditioned on strict schema *and* validation together, this is a
                     // distinct signal from the standalone validation flag, not a duplicate of it.
-                    criticalFailureExposureMultiplier *= 0.85;
-                    guardrailFactors.Add("Extraction with strict schema output and deterministic validation slightly reduces modeled critical-failure exposure.");
+                    criticalFailureExposureMultiplier *= ExtractionStrictValidationCriticalMultiplier;
+                    guardrailFactors.Add($"Strict extraction output with deterministic validation multiplies critical-failure exposure by {ExtractionStrictValidationCriticalMultiplier:0.##}.");
                 }
 
                 if (inputs.OutputConstraint == OutputConstraintOption.FreeText)
                 {
                     guardrailFactors.Add("Extraction usually works best with structured output. Free text output weakens validation and makes this category selection less representative.");
-                }
-
-                break;
-
-            case TaskCategoryOption.ClassificationRouting:
-                if (!inputs.HasRepresentativeEvalSet)
-                {
-                    guardrailFactors.Add("Classification/routing tasks should usually be evaluated against labeled examples. Without an eval set, the required success threshold is speculative.");
                 }
 
                 break;
@@ -938,19 +844,6 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
                 if (inputs.OutputConstraint == OutputConstraintOption.FreeText)
                 {
                     guardrailFactors.Add("Code generation is usually better modeled as code or executable output than free text.");
-                }
-
-                break;
-
-            case TaskCategoryOption.ResearchAnalysis:
-                if (!inputs.HasRagOrDomainContext)
-                {
-                    guardrailFactors.Add("Research/analysis without grounding raises synthesis and hallucination risk. Prefer supplied domain context or RAG when possible.");
-
-                    if (inputs.Verifiability != VerifiabilityOption.HardToDetectWrongAnswers)
-                    {
-                        ApplyPercentDelta(difficultyFactors, "Research without grounding", ResearchWithoutGroundingPercent, baseDifficulty, ref difficulty);
-                    }
                 }
 
                 break;
@@ -1011,7 +904,6 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
     }
 
     private static string BuildRecommendationReason(
-        ModelProfile model,
         double expectedValue,
         double effectiveSuccess,
         double expectedTotalDirectCost,
