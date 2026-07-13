@@ -68,31 +68,31 @@ Python is the most economical runner language because the public evaluation ecos
 Every execution begins from a committed manifest. For example:
 
 ```yaml
-experiment\_id: context-rag-v1
+experiment_id: context-rag-v1
 dataset:
   adapter: musique
   revision: <commit-or-dataset-hash>
   split: validation
-  sample\_seed: 1847
+  sample_seed: 1847
 models:
-  - catalog\_id: <stable-model-id>
-    provider\_model: <dated-provider-model-id>
-    aa\_snapshot: 2026-07-01
+  - catalog_id: <stable-model-id>
+    provider_model: <dated-provider-model-id>
+    aa_snapshot: 2026-07-01
 generation:
   temperature: 0
-  max\_output\_tokens: 512
-  reasoning\_effort: medium
+  max_output_tokens: 512
+  reasoning_effort: medium
   repeats: 1
 conditions:
-  - no\_context
-  - oracle\_context
-  - retrieved\_top\_5
-  - retrieved\_top\_5\_plus\_distractors
+  - no_context
+  - oracle_context
+  - retrieved_top_5
+  - retrieved_top_5_plus_distractors
 scorers:
-  - answer\_exact\_match
-  - answer\_token\_f1
-  - supporting\_fact\_recall
-  - retrieval\_ndcg\_at\_10
+  - answer_exact_match
+  - answer_token_f1
+  - supporting_fact_recall
+  - retrieval_ndcg_at_10
 ```
 
 The manifest hash becomes part of every result row and every generated calibration profile.
