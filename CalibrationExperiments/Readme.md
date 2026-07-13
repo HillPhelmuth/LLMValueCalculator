@@ -13,7 +13,7 @@ This plan turns the calculator's priors into versioned, reproducible calibration
 The convex intelligence transform is a retained design premise. The initial calibration profile should use the agreed six-segment curve:
 
 ```csharp
-\[
+[
     new Segment(10, 1.0),
     new Segment(20, 1.4),
     new Segment(30, 1.8),
