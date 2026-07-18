@@ -76,6 +76,7 @@ dataset:
   sample_seed: 1847
 models:
   - catalog_id: <stable-model-id>
+    provider: <provider-adapter-name>
     provider_model: <dated-provider-model-id>
     aa_snapshot: 2026-07-01
 generation:
@@ -83,6 +84,7 @@ generation:
   max_output_tokens: 512
   reasoning_effort: medium
   repeats: 1
+prompt_version: context-rag-v1
 conditions:
   - no_context
   - oracle_context
@@ -497,3 +499,54 @@ If evidence is inconclusive, retain the current prior and label its interval. If
 
 This order prevents risk controls, retries, or partial-value logic from distorting the intelligence curve fit.
 
+## Harness implementation status
+
+The first implementation slice lives in this folder and covers the shared core needed before experiment-specific integrations:
+
+- strict YAML manifest validation and canonical SHA-256 manifest hashes;
+- a provider-neutral request and response contract;
+- dataset and scorer adapter contracts;
+- a hash-verified JSONL dataset adapter;
+- normalized SQLite run, attempt, score, case-feature, and response-cache tables;
+- content-addressed, atomic raw request and response storage;
+- bounded asynchronous execution, provider concurrency limits, rate-limit hooks, transport retries, caching, and resumability;
+- normalized exact-match and token-F1 scorers; and
+- a credential-free fake provider and smoke manifest that exercise the complete path.
+
+Run the tests from `CalibrationExperiments`:
+
+```bash
+PYTHONPATH=. python -m unittest discover -s tests -v
+```
+
+Run the smoke experiment:
+
+```bash
+PYTHONPATH=. python -m calibration run manifests/smoke.yaml
+```
+
+Run state is written to `.calibration-runs/runs.sqlite3`. Raw and normalized provider artifacts are stored by content hash under `.calibration-runs/objects`. Use `--resume-run-id <id>` to continue an interrupted run without executing completed work items again.
+
+The foundation also provides:
+
+- Python 3.12.x pinned in `pyproject.toml` and a checked-in `uv.lock`; `uv sync --locked` creates the clean environment.
+- JSON Schema 2020-12 records under `calibration/schemas/` for manifests, runs, work items, attempts, scores, case features, model snapshots, fitted estimates, profiles, provenance, and artifact metadata.
+- Resolved manifests with explicit sample IDs, prompt/scorer locks, condition hashes, routing, budgets, holdouts, retries, container digests, fitting seed, and a second resolved-manifest hash saved with each run.
+- Environment-only `OPENROUTER_API_KEY` handling and recursive redaction for headers, URLs, nested payloads, artifacts, and errors. Credentials are never part of a manifest or database record.
+- Versioned SQLite migrations, lifecycle states (`created`, `running`, `pausing`, `completed`, `failed`, `cancelled`), lease recovery, unique logical attempts, foreign-keyed scores, model snapshots, fitted-estimate lineage, and run provenance.
+- Atomic content-addressed artifacts with metadata sidecars and SHA-256 readback checks. `llm-value-calibration audit <run-id>` audits both lineage and artifacts.
+- Deterministic immutable Parquet snapshots for normalized runs, attempts, scores, case features, model snapshots, and fitted estimates.
+
+Useful locked commands:
+
+```bash
+uv sync --locked
+uv run --locked python -m unittest discover -s tests -v
+uv run --locked python -m calibration run manifests/smoke.yaml
+uv run --locked python -m calibration export <run-id>
+uv run --locked python -m calibration audit <run-id>
+uv run --locked pip-audit
+uv run --locked pip-licenses --format=markdown --with-urls --with-authors
+```
+
+The next implementation slice should add the first real provider adapter and the initial exact-score benchmark adapter for experiment 1.

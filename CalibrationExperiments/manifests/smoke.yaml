@@ -1,0 +1,25 @@
+experiment_id: harness-smoke-v1
+dataset:
+  adapter: jsonl
+  revision: sha256:93a11f571697498d69faa928c3c8baa7ee8216067311a8a68cbff0a4e0788733
+  split: validation
+  sample_seed: 1847
+  options:
+    path: ../datasets/smoke/cases.jsonl
+models:
+  - catalog_id: fake-echo-v1
+    provider: fake
+    provider_model: fake/echo-v1
+    aa_snapshot: smoke-only
+generation:
+  temperature: 0
+  max_output_tokens: 32
+  reasoning_effort: null
+  repeats: 1
+prompt_version: smoke-v1
+conditions:
+  - baseline
+scorers:
+  - answer_exact_match
+  - answer_token_f1
+

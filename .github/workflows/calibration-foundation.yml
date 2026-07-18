@@ -1,0 +1,34 @@
+name: calibration-foundation
+
+on:
+  pull_request:
+    paths:
+      - "CalibrationExperiments/**"
+      - ".github/workflows/calibration-foundation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "CalibrationExperiments/**"
+
+permissions:
+  contents: read
+
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: CalibrationExperiments
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run ruff check calibration tests
+      - run: uv run python -m unittest discover -s tests -v
+      - run: uv run python -m calibration run manifests/smoke.yaml --output .calibration-runs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calibration-smoke
+          path: CalibrationExperiments/.calibration-runs

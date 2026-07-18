@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "calibration/score/1.0",
+  "type": "object",
+  "required": ["schema_version", "attempt_id", "scorer_name", "scorer_version"],
+  "properties": {"schema_version": {"const": "1.0"}, "attempt_id": {"type": "string"}, "scorer_name": {"type": "string"}, "scorer_version": {"type": "string"}, "success": {"type": ["boolean", "null"]}, "good": {"type": ["boolean", "null"]}, "acceptable": {"type": ["boolean", "null"]}, "critical": {"type": ["boolean", "null"]}, "schema_valid": {"type": ["boolean", "null"]}, "semantic_score": {"type": ["number", "null"]}, "grounded_score": {"type": ["number", "null"]}, "tool_state_score": {"type": ["number", "null"]}, "failure_class": {"type": ["string", "null"]}, "metrics": {"type": "object"}},
+  "additionalProperties": false
+}

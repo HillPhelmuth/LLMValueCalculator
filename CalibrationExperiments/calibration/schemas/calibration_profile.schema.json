@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "calibration/profile/1.0",
+  "type": "object",
+  "required": ["schema_version", "profile_version", "profile_hash", "curve_segments", "tau", "error_floor", "adjustments", "risk_multipliers", "uncertainty", "manifest_hashes", "fitting_data_hash", "aa_snapshot"],
+  "properties": {"schema_version": {"const": "1.0"}, "profile_version": {"type": "string"}, "profile_hash": {"type": "string", "minLength": 64}, "curve_segments": {"type": "array", "items": {"type": "object"}}, "tau": {"type": "object", "additionalProperties": {"type": "number"}}, "error_floor": {"type": "number", "minimum": 0, "maximum": 1}, "adjustments": {"type": "object"}, "risk_multipliers": {"type": "object"}, "uncertainty": {"type": "object"}, "manifest_hashes": {"type": "array", "items": {"type": "string"}}, "fitting_data_hash": {"type": "string"}, "aa_snapshot": {"type": "string"}},
+  "additionalProperties": false
+}

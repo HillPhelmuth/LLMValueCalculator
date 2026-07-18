@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "calibration/fitted-estimate/1.0",
+  "type": "object",
+  "required": ["schema_version", "estimate_id", "run_id", "parameter", "value", "source_row_ids", "provenance_id"],
+  "properties": {"schema_version": {"const": "1.0"}, "estimate_id": {"type": "string"}, "run_id": {"type": "string"}, "parameter": {"type": "string"}, "value": {"type": "number"}, "lower": {"type": ["number", "null"]}, "upper": {"type": ["number", "null"]}, "source_row_ids": {"type": "array", "items": {"type": "string"}}, "source_export_hash": {"type": ["string", "null"]}, "provenance_id": {"type": "string"}, "diagnostics": {"type": "object"}}
+  ,"additionalProperties": false
+}
