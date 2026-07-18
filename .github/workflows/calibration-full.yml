@@ -78,6 +78,10 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --locked
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: pwsh -NoProfile -File scripts/security-review.ps1 -SkipSecretScan
       # full-calibration.ps1 writes candidate-profile.json only; promotion is a separate task.
       - run: pwsh -NoProfile -File scripts/full-calibration.ps1 -Manifests "${{ inputs.manifests }}" -MaxCases ${{ inputs.max_cases }} -FittingData "${{ inputs.fitting_data }}"
       - uses: actions/upload-artifact@v4

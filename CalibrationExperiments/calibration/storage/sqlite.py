@@ -21,7 +21,7 @@ from calibration.schema import SCHEMA_VERSION, validate_record
 from calibration.security import redact_text
 
 
-SCHEMA_MIGRATION_VERSION = 4
+SCHEMA_MIGRATION_VERSION = 5
 RUN_STATES = {"created", "running", "pausing", "completed", "failed", "cancelled"}
 
 
@@ -73,6 +73,10 @@ class SqliteRunStore:
         if current < 4:
             self._apply_provider_response_schema()
             self._record_migration(4)
+            current = 4
+        if current < 5:
+            self._apply_monitoring_schema()
+            self._record_migration(5)
         self._connection.commit()
 
     def _apply_initial_schema(self) -> None:
@@ -292,6 +296,47 @@ class SqliteRunStore:
             CREATE INDEX IF NOT EXISTS ix_transport_events_run_id ON transport_events(run_id);
             """
         )
+
+    def _apply_monitoring_schema(self) -> None:
+        self._connection.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS budget_events (
+                schema_version TEXT NOT NULL DEFAULT '1.0',
+                event_id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL REFERENCES runs(run_id),
+                experiment_id TEXT NOT NULL,
+                model_id TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                request_hash TEXT NOT NULL,
+                amount_usd REAL NOT NULL,
+                estimated_usd REAL NOT NULL DEFAULT 0,
+                token_count INTEGER NOT NULL,
+                request_count INTEGER NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('reserved', 'settled', 'released', 'over_budget')),
+                created_utc TEXT NOT NULL,
+                settled_utc TEXT
+            );
+            CREATE INDEX IF NOT EXISTS ix_budget_events_run_id ON budget_events(run_id);
+            CREATE INDEX IF NOT EXISTS ix_budget_events_created_utc ON budget_events(created_utc);
+            CREATE TABLE IF NOT EXISTS monitoring_events (
+                schema_version TEXT NOT NULL DEFAULT '1.0',
+                event_id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL REFERENCES runs(run_id),
+                event_type TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                created_utc TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS ix_monitoring_events_run_id ON monitoring_events(run_id);
+            """
+        )
+        columns = {
+            str(row[1])
+            for row in self._connection.execute("PRAGMA table_info(budget_events)").fetchall()
+        }
+        if "estimated_usd" not in columns:
+            self._connection.execute(
+                "ALTER TABLE budget_events ADD COLUMN estimated_usd REAL NOT NULL DEFAULT 0"
+            )
 
     def _migrate_legacy_database(self) -> None:
         """Upgrade the original pre-migration schema without discarding results."""
@@ -526,7 +571,19 @@ class SqliteRunStore:
             raise ValueError("Cannot resume a run with a different manifest hash")
         if resolved_manifest and row["resolved_manifest_hash"] != resolved_manifest["resolved_manifest_hash"]:
             raise ValueError("Cannot resume a run with a different resolved manifest")
-        self.set_run_status(run_id, "running")
+        with self._connection:
+            self._connection.execute(
+                "UPDATE runs SET status='running', cancellation_requested=0, failure_message=NULL WHERE run_id=?",
+                (run_id,),
+            )
+            self._connection.execute(
+                """
+                UPDATE work_items
+                SET status='pending', lease_owner=NULL, lease_expires_utc=NULL, heartbeat_utc=NULL
+                WHERE run_id=? AND status='leased'
+                """,
+                (run_id,),
+            )
 
     def resolved_manifest(self, run_id: str) -> dict[str, Any]:
         row = self._connection.execute(
@@ -676,6 +733,130 @@ class SqliteRunStore:
                 ),
             )
         return event_id
+
+    def budget_totals(
+        self,
+        *,
+        run_id: str,
+        experiment_id: str | None = None,
+        model_id: str | None = None,
+        day: str | None = None,
+        exclude_event_id: str | None = None,
+    ) -> dict[str, float]:
+        clauses = ["status <> 'released'"]
+        parameters: list[Any] = []
+        if run_id:
+            clauses.append("run_id = ?")
+            parameters.append(run_id)
+        if experiment_id is not None:
+            clauses.append("experiment_id = ?")
+            parameters.append(experiment_id)
+        if model_id is not None:
+            clauses.append("model_id = ?")
+            parameters.append(model_id)
+        if day is not None:
+            clauses.append("substr(created_utc, 1, 10) = ?")
+            parameters.append(day)
+        if exclude_event_id is not None:
+            clauses.append("event_id <> ?")
+            parameters.append(exclude_event_id)
+        row = self._connection.execute(
+            "SELECT COALESCE(SUM(amount_usd), 0), COALESCE(SUM(token_count), 0), COALESCE(SUM(request_count), 0) "
+            "FROM budget_events WHERE " + " AND ".join(clauses),
+            parameters,
+        ).fetchone()
+        return {"usd": float(row[0]), "tokens": float(row[1]), "requests": float(row[2])}
+
+    def record_budget_event(
+        self,
+        *,
+        run_id: str,
+        experiment_id: str,
+        model_id: str,
+        provider: str,
+        request_hash: str,
+        amount_usd: float,
+        estimated_usd: float | None = None,
+        token_count: int,
+        request_count: int = 1,
+        status: str = "reserved",
+    ) -> str:
+        if status not in {"reserved", "settled", "released", "over_budget"}:
+            raise ValueError(f"Unsupported budget event status: {status}")
+        event_id = str(uuid.uuid4())
+        with self._connection:
+            self._connection.execute(
+                "INSERT INTO budget_events (schema_version, event_id, run_id, experiment_id, model_id, provider, request_hash, amount_usd, estimated_usd, token_count, request_count, status, created_utc) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    SCHEMA_VERSION,
+                    event_id,
+                    run_id,
+                    experiment_id,
+                    model_id,
+                    provider,
+                    request_hash,
+                    float(amount_usd),
+                    float(amount_usd if estimated_usd is None else estimated_usd),
+                    int(token_count),
+                    int(request_count),
+                    status,
+                    utc_now_iso(),
+                ),
+            )
+        return event_id
+
+    def settle_budget_event(self, event_id: str, amount_usd: float, *, over_budget: bool = False) -> None:
+        status = "over_budget" if over_budget else "settled"
+        with self._connection:
+            cursor = self._connection.execute(
+                "UPDATE budget_events SET amount_usd=?, status=?, settled_utc=? WHERE event_id=? AND status='reserved'",
+                (float(amount_usd), status, utc_now_iso(), event_id),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError(f"Budget event is not reservable: {event_id}")
+
+    def record_monitoring_event(self, run_id: str, event_type: str, payload: dict[str, Any]) -> str:
+        event_id = str(uuid.uuid4())
+        with self._connection:
+            self._connection.execute(
+                "INSERT INTO monitoring_events (schema_version, event_id, run_id, event_type, payload_json, created_utc) VALUES (?, ?, ?, ?, ?, ?)",
+                (SCHEMA_VERSION, event_id, run_id, event_type, _json(payload), utc_now_iso()),
+            )
+        return event_id
+
+    def monitoring_rows(self, run_id: str) -> list[dict[str, Any]]:
+        return [
+            dict(row)
+            for row in self._connection.execute(
+                "SELECT * FROM monitoring_events WHERE run_id=? ORDER BY created_utc, event_id",
+                (run_id,),
+            ).fetchall()
+        ]
+
+    def budget_rows(self, run_id: str) -> list[dict[str, Any]]:
+        return [
+            dict(row)
+            for row in self._connection.execute(
+                "SELECT * FROM budget_events WHERE run_id=? ORDER BY created_utc, event_id",
+                (run_id,),
+            ).fetchall()
+        ]
+
+    def queue_counts(self, run_id: str) -> dict[str, int]:
+        rows = self._connection.execute(
+            "SELECT status, COUNT(*) FROM work_items WHERE run_id=? GROUP BY status", (run_id,)
+        ).fetchall()
+        values = {str(row[0]): int(row[1]) for row in rows}
+        return {key: values.get(key, 0) for key in ("pending", "leased", "completed", "failed")}
+
+    def cancellation_requested(self, run_id: str) -> bool:
+        row = self._connection.execute(
+            "SELECT cancellation_requested FROM runs WHERE run_id=?", (run_id,)
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"Unknown run ID: {run_id}")
+        return bool(row[0])
 
     def create_work_item(self, run_id: str, request_hash: str) -> str:
         work_item_id = str(uuid.uuid4())
@@ -1129,8 +1310,8 @@ class SqliteRunStore:
     def run_summary(self, run_id: str) -> dict[str, object]:
         row = self._connection.execute(
             """
-            SELECT r.run_id, r.experiment_id, r.manifest_hash, r.resolved_manifest_hash,
-                   r.status, r.completed_utc,
+            SELECT r.run_id, r.experiment_id, r.manifest_hash, r.manifest_json, r.resolved_manifest_hash,
+                   r.status, r.started_utc, r.completed_utc, r.heartbeat_utc,
                    (SELECT COUNT(*) FROM attempts a WHERE a.run_id = r.run_id) AS attempts,
                    (SELECT COUNT(*) FROM scores s JOIN attempts a ON a.attempt_id = s.attempt_id WHERE a.run_id = r.run_id) AS scores,
                    (SELECT COALESCE(SUM(a.provider_cost), 0) FROM attempts a WHERE a.run_id = r.run_id) AS provider_cost,

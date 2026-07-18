@@ -1241,7 +1241,7 @@ Create a protected workflow dispatch environment, split execution into restartab
 
 Added protected manual `.github/workflows/calibration-full.yml` and `scripts/full-calibration.ps1`. Dispatch inputs bind the run to the exact manifest-set hash, model snapshot hash, reviewed code commit, named reviewer/timestamp, fitting-data input, and explicit budgets. Runs persist SQLite/artifact state, resume the latest run on rerun, audit/export before fitting, enforce the 2% missing-cell gate, generate a candidate-only profile/report, and fail if a production-profile artifact appears. No promotion step is present.
 
-### - [ ] T059 - Add spend controls and operational monitoring
+### - [x] T059 - Add spend controls and operational monitoring
 
 **Description**
 
@@ -1260,9 +1260,15 @@ Add pre-dispatch and post-response budget checks, structured logs and metrics, h
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added `calibration/monitoring.py` with persisted pre-dispatch reservations and
+post-response settlement for run, experiment, model, and daily ceilings, plus
+request/token limits and budget-risk calculations. SQLite migration 5 adds budget
+and monitoring event tables; the runner records structured transport/attempt events,
+run and work-item heartbeats, queue metrics, and resumable cancellation. Added
+`calibration status` and `calibration cancel` commands and tests covering ceilings,
+alerts, status metrics, lease recovery, and cancellation/resume behavior.
 
-### - [ ] T060 - Complete security, privacy, and compliance review
+### - [x] T060 - Complete security, privacy, and compliance review
 
 **Description**
 
@@ -1281,9 +1287,15 @@ Perform threat modeling, dependency and image scans, secret scans, sandbox tests
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added `security/data-policy.yaml`, `security/threat-model.md`, and `security/REVIEW.md`
+covering secrets, prompt exposure, dataset content, generated code, dependencies,
+artifacts, retention, OpenRouter data collection/ZDR, and license/terms gates. Added
+`scripts/security-review.ps1`, security tests, and a required full-run workflow
+security-review/gitleaks gate; the synthetic registry entry records CC0 terms and
+permitted use. Added the immutable `security/sandbox-image-lock.json` and sandbox
+policy tests. Local security checks pass; CI supplies the secret scanner.
 
-### - [ ] T061 - Implement candidate-profile review and promotion
+### - [x] T061 - Implement candidate-profile review and promotion
 
 **Description**
 
@@ -1302,9 +1314,16 @@ Build a promotion-check command, require recorded approvals, create a versioned 
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added `calibration/promotion.py` and CLI commands for promotion checks, promotion,
+rollback, and append-only history. Evidence is bound to immutable candidate/baseline
+hashes and checks intervals, 80% sign agreement, non-duplication, held-out
+improvement, material recommendation impact, reviewer approval, cards, diffs,
+provenance, cost, and limitations. Promotion writes immutable profile versions and
+reviewed JSON/C# application artifacts; rollback selects an earlier immutable hash
+without rewriting history. Tests cover acceptance, rejection, application output,
+and rollback.
 
-### - [ ] T062 - Write operator and contributor runbooks
+### - [x] T062 - Write operator and contributor runbooks
 
 **Description**
 
@@ -1323,9 +1342,14 @@ Write concise command-oriented documentation, link manifests and schemas, includ
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added command-oriented `docs/CALIBRATION_RUNBOOK.md` covering fake smoke, approved
+OpenRouter canary, dataset preparation, status/cancel/resume, audit/export/fit/report,
+promotion, credential rotation, model/catalog drift, budget exhaustion, corrupt
+artifacts, failed migrations, and stalled work. Added `docs/architecture.md` with a
+Mermaid architecture/data-flow diagram and `scripts/rehearsal.ps1` as the documented
+rehearsal entry point.
 
-### - [ ] T063 - Perform the final end-to-end rehearsal
+### - [x] T063 - Perform the final end-to-end rehearsal
 
 **Description**
 
@@ -1344,4 +1368,10 @@ Run a budget-limited representative rehearsal using the same workflows as produc
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added `calibration/rehearsal.py`, `calibration rehearse`, and a rehearsal test. The
+offline rehearsal prepares the locked smoke dataset, snapshots the recorded
+OpenRouter catalog plus AA mapping/panel, runs fake inference/scoring, injects an
+intentional interruption, resumes without duplicate request hashes, exports Parquet,
+fits a candidate, renders the calibration card and scenario diff, runs integrity/
+coverage/budget/diagnostic gates, and archives a promotion evidence package. The
+candidate is explicitly left `review_required_unpromoted`; the rehearsal passed.

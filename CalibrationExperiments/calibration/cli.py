@@ -11,6 +11,10 @@ from calibration.datasets.jsonl import JsonlDatasetAdapter
 from calibration.datasets.registry import DatasetAcquirer, DatasetRegistry
 from calibration.experiments import write_experiment_plan_registry
 from calibration.manifest import load_manifest
+from calibration.monitoring import BudgetLimits, write_run_status
+from calibration.pipeline import write_candidate_profile
+from calibration.promotion import PromotionStore, check_promotion
+from calibration.reports import CalibrationCard, write_calibration_card
 from calibration.preflight import run_preflight
 from calibration.runner.runner import CalibrationRunner
 from calibration.storage.artifacts import ArtifactStore
@@ -57,6 +61,41 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("manifest", type=Path)
     plans = subparsers.add_parser("freeze-plans", help="Freeze the pre-registered Phase 4 experiment plans")
     plans.add_argument("--output", type=Path, default=Path("calibration/data/experiment_plans.json"))
+    status = subparsers.add_parser("status", help="Show persisted run metrics and operational alerts")
+    status.add_argument("run_id", nargs="?")
+    status.add_argument("--database", type=Path, default=Path(".calibration-runs/runs.sqlite3"))
+    status.add_argument("--output", type=Path)
+    status.add_argument("--expected-cells", type=int)
+    cancel = subparsers.add_parser("cancel", help="Request a resumable run cancellation")
+    cancel.add_argument("run_id")
+    cancel.add_argument("--database", type=Path, default=Path(".calibration-runs/runs.sqlite3"))
+    fit = subparsers.add_parser("fit-candidate", help="Fit a candidate profile from locked fitting data")
+    fit.add_argument("fitting_data", type=Path)
+    fit.add_argument("--output", type=Path, default=Path("candidate-profile.json"))
+    fit.add_argument("--manifest-hash", action="append", required=True)
+    fit.add_argument("--aa-snapshot", required=True)
+    fit.add_argument("--profile-version", default="candidate-1.0.0")
+    fit.add_argument("--bootstrap-replicates", type=int, default=20)
+    render = subparsers.add_parser("render-report", help="Render a calibration card JSON to Markdown and HTML")
+    render.add_argument("card", type=Path)
+    render.add_argument("--output", type=Path, required=True)
+    promotion_check = subparsers.add_parser("promotion-check", help="Evaluate candidate promotion evidence")
+    promotion_check.add_argument("candidate", type=Path)
+    promotion_check.add_argument("baseline", type=Path)
+    promotion_check.add_argument("evidence", type=Path)
+    promote = subparsers.add_parser("promote-candidate", help="Promote a reviewed immutable candidate")
+    promote.add_argument("candidate", type=Path)
+    promote.add_argument("baseline", type=Path)
+    promote.add_argument("evidence", type=Path)
+    promote.add_argument("--store", type=Path, default=Path(".calibration-profiles"))
+    promote.add_argument("--application-directory", type=Path)
+    rollback = subparsers.add_parser("rollback-profile", help="Point the active profile at an immutable prior hash")
+    rollback.add_argument("profile_hash")
+    rollback.add_argument("--store", type=Path, default=Path(".calibration-profiles"))
+    history = subparsers.add_parser("promotion-history", help="Show append-only profile promotion history")
+    history.add_argument("--store", type=Path, default=Path(".calibration-profiles"))
+    rehearsal = subparsers.add_parser("rehearse", help="Run the offline interruption/resume end-to-end rehearsal")
+    rehearsal.add_argument("--output", type=Path, default=Path(".rehearsal-runs"))
     return parser
 
 
@@ -83,6 +122,83 @@ def main() -> None:
         print(json.dumps(report, indent=2, sort_keys=True))
         if report["provenance_errors"] or report["artifact_errors"]:
             raise SystemExit(1)
+        return
+
+    if arguments.command == "status":
+        with SqliteRunStore(arguments.database) as store:
+            run_id = arguments.run_id or store.latest_run_id()
+            summary = store.run_summary(run_id)
+            manifest = load_manifest_from_summary(summary)
+            status_path = arguments.output or arguments.database.parent / f"{run_id}-status.json"
+            write_run_status(
+                store,
+                run_id,
+                status_path,
+                limits=BudgetLimits.from_manifest(manifest),
+                expected_cells=arguments.expected_cells,
+            )
+            result = json.loads(status_path.read_text(encoding="utf-8"))
+            result["summary"] = summary
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return
+
+    if arguments.command == "cancel":
+        with SqliteRunStore(arguments.database) as store:
+            store.cancel_run(arguments.run_id)
+            result = store.run_summary(arguments.run_id)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return
+
+    if arguments.command == "fit-candidate":
+        if arguments.bootstrap_replicates < 1:
+            raise SystemExit("--bootstrap-replicates must be positive")
+        result = write_candidate_profile(
+            arguments.fitting_data,
+            arguments.output,
+            manifest_hashes=tuple(arguments.manifest_hash),
+            aa_snapshot=arguments.aa_snapshot,
+            profile_version=arguments.profile_version,
+            bootstrap_replicates=arguments.bootstrap_replicates,
+        )
+        print(json.dumps({"candidate_profile": str(result)}, indent=2, sort_keys=True))
+        return
+
+    if arguments.command == "render-report":
+        card = CalibrationCard(**json.loads(arguments.card.read_text(encoding="utf-8")))
+        files = write_calibration_card(card, arguments.output)
+        print(json.dumps({"files": [str(path) for path in files]}, indent=2, sort_keys=True))
+        return
+
+    if arguments.command == "promotion-check":
+        result = check_promotion(arguments.candidate, arguments.baseline, arguments.evidence)
+        print(json.dumps(result.to_json(), indent=2, sort_keys=True))
+        if not result.passed:
+            raise SystemExit(1)
+        return
+
+    if arguments.command == "promote-candidate":
+        result = PromotionStore(arguments.store).promote(
+            arguments.candidate,
+            arguments.baseline,
+            arguments.evidence,
+            application_directory=arguments.application_directory,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return
+
+    if arguments.command == "rollback-profile":
+        print(json.dumps(PromotionStore(arguments.store).rollback(arguments.profile_hash), indent=2, sort_keys=True))
+        return
+
+    if arguments.command == "promotion-history":
+        print(json.dumps(PromotionStore(arguments.store).history(), indent=2, sort_keys=True))
+        return
+
+    if arguments.command == "rehearse":
+        from calibration.rehearsal import run_rehearsal
+
+        result = run_rehearsal(arguments.output)
+        print(result.read_text(encoding="utf-8"))
         return
 
     if arguments.command == "preflight":
@@ -180,6 +296,7 @@ def main() -> None:
             artifacts=ArtifactStore(output / "objects"),
             catalog=catalog,
             max_workers=arguments.workers,
+            budget_limits=BudgetLimits.from_manifest(manifest),
         )
         summary = asyncio.run(
             runner.run(
@@ -188,6 +305,29 @@ def main() -> None:
             )
         )
     print(json.dumps(summary, indent=2, sort_keys=True))
+
+
+def load_manifest_from_summary(summary: dict[str, object]):
+    """Rehydrate the manifest stored with a run for status-only operators."""
+    from calibration.manifest import ExperimentManifest
+
+    # run_summary intentionally exposes the immutable manifest only through the
+    # provenance/run record; status can still use conservative defaults when a
+    # legacy database does not include it in the summary.
+    raw = summary.get("manifest_json")
+    if isinstance(raw, str):
+        return ExperimentManifest.model_validate(json.loads(raw))
+    return ExperimentManifest.model_validate(
+        {
+            "experiment_id": str(summary["experiment_id"]),
+            "dataset": {"adapter": "jsonl", "revision": "unknown", "split": "validation", "sample_seed": 0},
+            "models": [{"catalog_id": "unknown", "provider": "unknown", "provider_model": "unknown", "aa_snapshot": "unknown"}],
+            "generation": {"temperature": 0, "max_output_tokens": 1},
+            "prompt_version": "unknown",
+            "conditions": ["unknown"],
+            "scorers": ["unknown"],
+        }
+    )
 
 
 if __name__ == "__main__":

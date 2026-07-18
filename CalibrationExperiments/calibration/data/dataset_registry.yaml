@@ -6,9 +6,14 @@ datasets:
     adapter: jsonl
     adapter_version: jsonl-1.0.0
     source_url: https://example.invalid/smoke-jsonl
-    license: CC-BY-4.0
+    license: CC0-1.0
     revision: sha256:0000000000000000000000000000000000000000000000000000000000000000
     file_name: cases.jsonl
     splits: [validation]
     labels_available: true
-    notes: Replace this template entry with a reviewed source and content hash.
+    terms_url: https://creativecommons.org/publicdomain/zero/1.0/
+    notes: Synthetic repository fixture; external sources require a new license and terms review.
+    metadata:
+      data_class: synthetic_smoke
+      terms_review: approved-for-synthetic-fixture
+      permitted_use: true

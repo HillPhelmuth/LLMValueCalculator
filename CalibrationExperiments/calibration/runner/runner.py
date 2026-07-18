@@ -12,6 +12,7 @@ from pathlib import Path
 from calibration.datasets.base import DatasetAdapter
 from calibration.datasets.jsonl import JsonlDatasetAdapter
 from calibration.manifest import ExperimentManifest, ModelConfig
+from calibration.monitoring import BudgetLedger, BudgetLimits
 from calibration.models import CanonicalCase, ProviderRequest, ProviderResponse
 from calibration.providers.base import ModelProvider
 from calibration.providers.compatibility import (
@@ -44,6 +45,10 @@ class WorkItem:
     repeat_index: int
 
 
+class RunCancelled(RuntimeError):
+    """Raised internally when an operator requests a resumable cancellation."""
+
+
 class CalibrationRunner:
     def __init__(
         self,
@@ -57,6 +62,7 @@ class CalibrationRunner:
         catalog: CatalogSnapshot | None = None,
         max_workers: int = 8,
         transport_retries: int | None = None,
+        budget_limits: BudgetLimits | None = None,
     ) -> None:
         self.manifest = manifest
         self.manifest_path = Path(manifest_path).resolve()
@@ -88,6 +94,9 @@ class CalibrationRunner:
         self.budget = AsyncBudgetGate(
             max_requests=manifest.budgets.max_requests,
             max_tokens=manifest.budgets.max_tokens,
+        )
+        self.budget_ledger = BudgetLedger(
+            budget_limits or BudgetLimits.from_manifest(manifest)
         )
         self._provider_semaphores = {
             name: asyncio.Semaphore(provider.max_concurrency)
@@ -154,8 +163,12 @@ class CalibrationRunner:
         for item in work_items:
             queue.put_nowait(item)
 
+        heartbeat_task = asyncio.create_task(self._run_heartbeat(run_id))
+
         async def worker() -> None:
             while True:
+                if self.store.cancellation_requested(run_id):
+                    raise RunCancelled(f"Run cancellation requested: {run_id}")
                 try:
                     item = queue.get_nowait()
                 except asyncio.QueueEmpty:
@@ -177,10 +190,29 @@ class CalibrationRunner:
                     task.cancel()
                 await asyncio.gather(*workers, return_exceptions=True)
                 raise
-            self.store.mark_completed(run_id)
+            if self.store.cancellation_requested(run_id):
+                self.store.set_run_status(run_id, "cancelled")
+            else:
+                self.store.mark_completed(run_id)
+        except RunCancelled as error:
+            self.store.record_monitoring_event(
+                run_id, "run_cancelled", {"message": str(error), "resumable": True}
+            )
+            if not self.store.cancellation_requested(run_id):
+                self.store.set_run_status(run_id, "cancelled")
+        except asyncio.CancelledError:
+            raise
         except Exception as error:
+            self.store.record_monitoring_event(
+                run_id,
+                "run_failed",
+                {"error_type": type(error).__name__, "message": str(error)},
+            )
             self.store.mark_failed(run_id, f"{type(error).__name__}: {error}")
             raise
+        finally:
+            heartbeat_task.cancel()
+            await asyncio.gather(heartbeat_task, return_exceptions=True)
 
         return self.store.run_summary(run_id)
 
@@ -262,45 +294,59 @@ class CalibrationRunner:
             run_id, owner, work_item_id=work_item_id
         ) != work_item_id:
             return
-        raw_request_uri = self.artifacts.put_json(asdict(request))
-        cached_uri = self.store.cached_response_uri(request.request_hash)
-        if cached_uri:
-            response = ProviderResponse.from_json(self.artifacts.get_json(cached_uri))
-            from_cache = True
-        else:
-            response = await self._call_provider(run_id, request)
-            serialized_request = getattr(
-                self.providers[request.provider], "serialized_request_for", lambda _: None
-            )(request.request_hash)
-            if serialized_request:
-                raw_request_uri = self.artifacts.put_json(
-                    json.loads(serialized_request)
-                )
-            normalized_response_uri = self.artifacts.put_json(response.to_json())
-            self.store.cache_response(request, normalized_response_uri, response)
-            from_cache = False
+        work_heartbeat = asyncio.create_task(self._work_item_heartbeat(work_item_id, owner))
+        try:
+            raw_request_uri = self.artifacts.put_json(asdict(request))
+            cached_uri = self.store.cached_response_uri(request.request_hash)
+            if cached_uri:
+                response = ProviderResponse.from_json(self.artifacts.get_json(cached_uri))
+                from_cache = True
+            else:
+                response = await self._call_provider(run_id, request)
+                serialized_request = getattr(
+                    self.providers[request.provider], "serialized_request_for", lambda _: None
+                )(request.request_hash)
+                if serialized_request:
+                    raw_request_uri = self.artifacts.put_json(
+                        json.loads(serialized_request)
+                    )
+                normalized_response_uri = self.artifacts.put_json(response.to_json())
+                self.store.cache_response(request, normalized_response_uri, response)
+                from_cache = False
 
-        raw_response_uri = self.artifacts.put_json(response.raw_response)
-        scores = tuple(
-            self.scorers[name].score(item.case, response)
-            for name in self.manifest.scorers
-        ) + self.dataset.score(item.case, response)
-        score_keys = [(score.scorer_name, score.scorer_version) for score in scores]
-        if len(score_keys) != len(set(score_keys)):
-            raise ValueError("Scorer registry produced duplicate score keys")
-        self.store.record_attempt_with_scores(
-            run_id=run_id,
-            case_id=item.case.case_id,
-            model=item.model,
-            request=request,
-            response=response,
-            raw_request_uri=raw_request_uri,
-            raw_response_uri=raw_response_uri,
-            scores=scores,
-            from_cache=from_cache,
-        )
-        self.store.complete_work_item(work_item_id, owner)
-        completed.add(request.request_hash)
+            raw_response_uri = self.artifacts.put_json(response.raw_response)
+            scores = tuple(
+                self.scorers[name].score(item.case, response)
+                for name in self.manifest.scorers
+            ) + self.dataset.score(item.case, response)
+            score_keys = [(score.scorer_name, score.scorer_version) for score in scores]
+            if len(score_keys) != len(set(score_keys)):
+                raise ValueError("Scorer registry produced duplicate score keys")
+            self.store.record_attempt_with_scores(
+                run_id=run_id,
+                case_id=item.case.case_id,
+                model=item.model,
+                request=request,
+                response=response,
+                raw_request_uri=raw_request_uri,
+                raw_response_uri=raw_response_uri,
+                scores=scores,
+                from_cache=from_cache,
+            )
+            self.store.complete_work_item(work_item_id, owner)
+            self.store.record_monitoring_event(
+                run_id,
+                "attempt_completed",
+                {
+                    "request_hash": request.request_hash,
+                    "model_id": request.model_id,
+                    "from_cache": from_cache,
+                },
+            )
+            completed.add(request.request_hash)
+        finally:
+            work_heartbeat.cancel()
+            await asyncio.gather(work_heartbeat, return_exceptions=True)
 
     async def _call_provider(
         self, run_id: str, request: ProviderRequest
@@ -308,12 +354,22 @@ class CalibrationRunner:
         provider = self.providers[request.provider]
         for transport_attempt in range(self.transport_retries + 1):
             await self._provider_limiters[request.provider].acquire()
+            reservation = None
             try:
                 await self.budget.reserve(
                     tokens=estimate_request_tokens(request) + request.max_output_tokens
                 )
+                reservation = self.budget_ledger.reserve(
+                    self.store,
+                    run_id,
+                    self.manifest,
+                    request,
+                    estimated_usd=BudgetLedger.estimate_request_usd(request, self.catalog),
+                    token_count=estimate_request_tokens(request) + request.max_output_tokens,
+                )
                 async with self._provider_semaphores[request.provider]:
                     response = await provider.complete(request)
+                self.budget_ledger.settle(self.store, reservation, response)
                 self.store.record_transport_event(
                     run_id,
                     request.request_hash,
@@ -323,6 +379,12 @@ class CalibrationRunner:
                 )
                 return response
             except BudgetExceeded:
+                if reservation is not None:
+                    try:
+                        self.store.settle_budget_event(reservation.event_id, 0.0)
+                    except ValueError:
+                        # Settlement may already have marked the reservation over budget.
+                        pass
                 self.store.record_transport_event(
                     run_id,
                     request.request_hash,
@@ -334,6 +396,8 @@ class CalibrationRunner:
                 )
                 raise
             except Exception as error:
+                if reservation is not None:
+                    self.budget_ledger.settle(self.store, reservation, None)
                 classification = classify_exception(error)
                 if not classification.retryable or transport_attempt >= self.transport_retries:
                     self.store.record_transport_event(
@@ -366,6 +430,16 @@ class CalibrationRunner:
                 )
                 await asyncio.sleep(delay)
         raise RuntimeError("Provider call exited without a response")
+
+    async def _run_heartbeat(self, run_id: str) -> None:
+        while True:
+            self.store.heartbeat_run(run_id)
+            await asyncio.sleep(15)
+
+    async def _work_item_heartbeat(self, work_item_id: str, owner: str) -> None:
+        while True:
+            self.store.heartbeat_work_item(work_item_id, owner)
+            await asyncio.sleep(15)
 
 
 def _git_commit(start: Path) -> str:
