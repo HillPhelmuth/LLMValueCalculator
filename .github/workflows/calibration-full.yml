@@ -1,0 +1,88 @@
+name: calibration-full-approved
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifests:
+        description: "Comma-separated frozen manifest paths"
+        required: true
+        default: "manifests/smoke.yaml"
+        type: string
+      fitting_data:
+        description: "Frozen JSONL Bernoulli fitting data path"
+        required: true
+        type: string
+      manifest_set_hash:
+        description: "SHA256 of the exact manifest set"
+        required: true
+        type: string
+      model_snapshot_hash:
+        description: "Frozen provider/model snapshot hash"
+        required: true
+        type: string
+      code_commit:
+        description: "Commit to run and review"
+        required: true
+        type: string
+      approved_by:
+        description: "Named reviewer"
+        required: true
+        type: string
+      approved_utc:
+        description: "Approval timestamp in UTC"
+        required: true
+        type: string
+      max_cases:
+        description: "Per-manifest case ceiling"
+        required: true
+        default: "5000"
+        type: string
+      max_usd:
+        description: "Run spend ceiling in USD"
+        required: true
+        default: "1000"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: calibration-full-approved
+  cancel-in-progress: false
+
+jobs:
+  approved-full-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    environment: calibration-full-run
+    defaults:
+      run:
+        working-directory: CalibrationExperiments
+    env:
+      CALIBRATION_FULL_APPROVED: "true"
+      CALIBRATION_APPROVED_BY: ${{ inputs.approved_by }}
+      CALIBRATION_APPROVED_UTC: ${{ inputs.approved_utc }}
+      CALIBRATION_MODEL_SNAPSHOT_HASH: ${{ inputs.model_snapshot_hash }}
+      CALIBRATION_CODE_COMMIT: ${{ inputs.code_commit }}
+      CALIBRATION_MANIFEST_SET_HASH: ${{ inputs.manifest_set_hash }}
+      CALIBRATION_MAX_USD: ${{ inputs.max_usd }}
+      CALIBRATION_MAX_REQUESTS: "100000"
+      CALIBRATION_MAX_TOKENS: "10000000"
+      CALIBRATION_TIMEOUT_MINUTES: "240"
+      CALIBRATION_FITTING_DATA: ${{ inputs.fitting_data }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.code_commit }}
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      # full-calibration.ps1 writes candidate-profile.json only; promotion is a separate task.
+      - run: pwsh -NoProfile -File scripts/full-calibration.ps1 -Manifests "${{ inputs.manifests }}" -MaxCases ${{ inputs.max_cases }} -FittingData "${{ inputs.fitting_data }}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: calibration-full-candidate-${{ github.run_id }}
+          path: CalibrationExperiments/.full-runs
+          if-no-files-found: ignore

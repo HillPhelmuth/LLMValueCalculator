@@ -2,6 +2,8 @@ namespace AAInteractiveValueAnalyzer.Client.Models;
 
 public sealed class RecommendationResult
 {
+    public string CalibrationProfileVersion { get; init; } = string.Empty;
+    public string CalibrationProfileHash { get; init; } = string.Empty;
     public required ModelProfile Model { get; init; }
     public required string CapabilityIndexName { get; init; }
     public double RawCapabilityScore { get; init; }
@@ -38,6 +40,8 @@ public sealed class RecommendationResult
 
 public sealed class AnalysisSummary
 {
+    public string CalibrationProfileVersion { get; init; } = string.Empty;
+    public string CalibrationProfileHash { get; init; } = string.Empty;
     public double EffectiveDifficulty { get; init; }
     public double Tau { get; init; }
     public IReadOnlyList<string> DifficultyFactors { get; init; } = [];

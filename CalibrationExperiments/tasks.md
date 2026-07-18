@@ -987,7 +987,7 @@ Implemented operational multiplier fitting with privacy approval and minimum-sam
 
 ## Phase 5: Joint fitting, profile generation, and application integration
 
-### - [ ] T047 - Build the canonical fitting dataset
+### - [x] T047 - Build the canonical fitting dataset
 
 **Description**
 
@@ -1006,9 +1006,9 @@ Implement pure transformation stages, validate balanced cells and sample counts,
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added pure `build_fitting_dataset()` transformations over exported attempts, scores, and case features with versioned inclusion/exclusion rules, holdout and public-label gates, missing-field checks, balanced-cell counts, preserved model/dataset/prompt/case/condition/repeat keys, row-level source IDs, derived-feature lineage, quality reports, and content hashes. Frozen rows and lock metadata can be written for later fitting.
 
-### - [ ] T048 - Implement the shared statistical fitting framework
+### - [x] T048 - Implement the shared statistical fitting framework
 
 **Description**
 
@@ -1027,9 +1027,9 @@ Select and pin a statistical library, implement tested model components, use sim
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added the shared `StatisticalModel` dispatcher for Bernoulli, paired, ordinal, retry, partial-value, and critical-rate fits. It reuses constrained monotone fitting, grouped bootstrap sampling, intervals, convergence/identifiability/predictive/sensitivity diagnostics, decision loss, and promotion gating; simulation-style recovery fixtures cover the core paths.
 
-### - [ ] T049 - Refit capability and risk layers jointly in the required order
+### - [x] T049 - Refit capability and risk layers jointly in the required order
 
 **Description**
 
@@ -1048,9 +1048,9 @@ Implement a staged fit orchestration, freeze intermediate prediction artifacts, 
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Implemented staged refitting that fits experiments 1–6 capability rows first, freezes content-hashed predictions, rejects duplicate pathways and risk-row contamination, then evaluates experiments 7/8 and operational risk decisions. Ablation and sensitivity metadata, evidence IDs, intervals, and a parameter decision table are retained before candidate profile creation.
 
-### - [ ] T050 - Freeze calibration profile schema version 1
+### - [x] T050 - Freeze calibration profile schema version 1
 
 **Description**
 
@@ -1069,9 +1069,9 @@ Create schema and typed Python model, encode source estimate IDs and promotion d
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added the typed immutable `CalibrationProfile` with curve segments, tau values, error floor, adjustments, risk multipliers, uncertainty, manifest hashes, fitting-data hash, Artificial Analysis snapshot, source estimate IDs, and promotion decisions. Semantic/schema validation enforces monotone slopes and ranges; profile identity is a content hash and writes are immutable under version/hash directories.
 
-### - [ ] T051 - Generate C# and JSON application artifacts
+### - [x] T051 - Generate C# and JSON application artifacts
 
 **Description**
 
@@ -1090,9 +1090,9 @@ Build a profile generator, add canonical numeric formatting, create golden outpu
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added deterministic JSON and strongly typed C# generators with full-precision numeric formatting, embedded profile version/hash comments and values, immutable generated-artifact writes, and round-trip/profile-validation tests. Invalid profiles fail generation before files are emitted.
 
-### - [ ] T052 - Integrate immutable profiles into RecommendationEngine
+### - [x] T052 - Integrate immutable profiles into RecommendationEngine
 
 **Description**
 
@@ -1111,9 +1111,9 @@ Create C# profile models and validation, isolate loading from scoring logic, upd
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added an immutable C# `CalibrationProfile` model with safe JSON loading/validation and baseline fallback, injected it into `RecommendationEngine`, routed profile-controlled tau/error-floor/risk/retry parameters through analysis, and exposed active profile version/hash on summaries and recommendation results. The Blazor client builds successfully with the baseline profile.
 
-### - [ ] T053 - Build the fixed scenario regression suite
+### - [x] T053 - Build the fixed scenario regression suite
 
 **Description**
 
@@ -1132,9 +1132,9 @@ Create versioned `UseCaseInputs` fixtures, run both profiles through the C# engi
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Implemented versioned scenario inputs spanning category, difficulty, guardrails, risk, retry, and economic regimes; baseline/candidate snapshot comparison includes eligibility, rank, success, critical risk, cost, expected value, deltas, and attribution. Material-change thresholds and un-attributed-change rejection prevent implausible promotions.
 
-### - [ ] T054 - Generate calibration cards and diagnostics
+### - [x] T054 - Generate calibration cards and diagnostics
 
 **Description**
 
@@ -1153,11 +1153,11 @@ Create report templates and plotting functions, include calibration and residual
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added machine-readable, Markdown, and HTML calibration cards containing coverage, exclusions, costs, fit diagnostics, holdout metrics, intervals, sensitivity, decisions, estimate IDs, and provenance IDs. Reports include split-separated SVG diagnostics and deterministic writers for frozen-output review.
 
 ## Phase 6: Testing, automation, operations, and promotion
 
-### - [ ] T055 - Complete unit, integration, contract, and recovery tests
+### - [x] T055 - Complete unit, integration, contract, and recovery tests
 
 **Description**
 
@@ -1176,9 +1176,9 @@ Build layered test fixtures, use recorded OpenRouter responses and fake clocks, 
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added the layered 45-test suite and Phase 6 quality tests. Coverage includes manifest/hash/schema/adapters/scorers, OpenRouter normalization and routing, retries/rate-limit handling, artifact corruption, expired-lease worker-loss recovery, SQLite locks, duplicate/cache/resume behavior, exports, fitting, profile generation, and workflow contracts. Live provider execution is isolated behind protected opt-in workflow jobs; CI publishes `coverage.xml`.
 
-### - [ ] T056 - Implement the pull-request smoke pipeline
+### - [x] T056 - Implement the pull-request smoke pipeline
 
 **Description**
 
@@ -1197,9 +1197,9 @@ Create a GitHub Actions workflow with trusted-event guards, dependency caching, 
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Upgraded `.github/workflows/calibration-foundation.yml` with concurrency cancellation, uv caching, Ruff, targeted Pyright checks, compile/import checks, unit/schema/adapter checks, coverage, and retained artifacts. Added the fixed 20-case `manifests/pr-smoke.yaml` and a separate budgeted `manifests/openrouter-smoke.yaml` (50-request, 5,000-token, $2 ceilings). Pull requests run credential-free fake smoke; live OpenRouter smoke is manual-only behind the `calibration-pr-live` environment and a protected approval flag, with a 15-minute job timeout.
 
-### - [ ] T057 - Implement the nightly calibration subset pipeline
+### - [x] T057 - Implement the nightly calibration subset pipeline
 
 **Description**
 
@@ -1218,9 +1218,9 @@ Create a scheduled workflow, set budget and concurrency limits, persist snapshot
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added scheduled/manual `.github/workflows/calibration-nightly.yml` and `scripts/nightly-calibration.ps1`. The approved one-model subset refreshes the OpenRouter catalog when the protected live flag is enabled, otherwise uses the cached credential-free dataset fallback. Reports persist coverage, failures, score drift, latency, spend, baseline linkage, and separate behavior/infrastructure alerts; the workflow caches the prior report and rejects any profile artifact.
 
-### - [ ] T058 - Implement the approved full-run pipeline
+### - [x] T058 - Implement the approved full-run pipeline
 
 **Description**
 
@@ -1239,7 +1239,7 @@ Create a protected workflow dispatch environment, split execution into restartab
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added protected manual `.github/workflows/calibration-full.yml` and `scripts/full-calibration.ps1`. Dispatch inputs bind the run to the exact manifest-set hash, model snapshot hash, reviewed code commit, named reviewer/timestamp, fitting-data input, and explicit budgets. Runs persist SQLite/artifact state, resume the latest run on rerun, audit/export before fitting, enforce the 2% missing-cell gate, generate a candidate-only profile/report, and fail if a production-profile artifact appears. No promotion step is present.
 
 ### - [ ] T059 - Add spend controls and operational monitoring
 

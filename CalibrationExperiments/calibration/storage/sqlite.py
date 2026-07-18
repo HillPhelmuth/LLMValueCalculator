@@ -1157,6 +1157,14 @@ class SqliteRunStore:
         )
         return summary
 
+    def latest_run_id(self) -> str:
+        row = self._connection.execute(
+            "SELECT run_id FROM runs ORDER BY started_utc DESC LIMIT 1"
+        ).fetchone()
+        if row is None:
+            raise ValueError("No calibration run exists in the database")
+        return str(row["run_id"])
+
 
 def _case_features_json(features: CaseFeatures) -> dict[str, Any]:
     return {

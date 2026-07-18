@@ -20,6 +20,8 @@ dependencies = [
 dev = [
     "pip-audit==2.9.0",
     "pip-licenses==5.0.0",
+    "coverage==7.6.12",
+    "pyright==1.1.405",
     "pytest==8.4.2",
     "ruff==0.13.0",
 ]

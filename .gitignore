@@ -465,4 +465,8 @@ FodyWeavers.xsd
 /CalibrationExperiments/.venv/
 /CalibrationExperiments/.ruff_cache/
 /CalibrationExperiments/.calibration-runs/
+/CalibrationExperiments/.ci-runs/
+/CalibrationExperiments/.nightly-runs/
+/CalibrationExperiments/.full-runs/
+/CalibrationExperiments/.ci-coverage.xml
 /CalibrationExperiments/*.egg-info/

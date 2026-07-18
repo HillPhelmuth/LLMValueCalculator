@@ -303,7 +303,7 @@ def normalize_model(raw: dict[str, Any]) -> ModelCatalogEntry:
 
 
 def _decimal_or_none(value: Any) -> Decimal | None:
-    if value is None or value == "":
+    if value is None or value == "" or value in {-1, "-1"}:
         return None
     try:
         decimal = Decimal(str(value))
