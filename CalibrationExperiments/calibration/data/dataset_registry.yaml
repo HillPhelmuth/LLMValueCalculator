@@ -1,0 +1,14 @@
+datasets:
+  # Add a reviewed public dataset revision here before using it in a run.
+  # Revisions are content hashes; labels_available must be false for public
+  # test sets whose labels are not released.
+  - dataset_id: smoke-jsonl
+    adapter: jsonl
+    adapter_version: jsonl-1.0.0
+    source_url: https://example.invalid/smoke-jsonl
+    license: CC-BY-4.0
+    revision: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    file_name: cases.jsonl
+    splits: [validation]
+    labels_available: true
+    notes: Replace this template entry with a reviewed source and content hash.

@@ -24,8 +24,13 @@ class Message:
 class CanonicalCase:
     case_id: str
     input: dict[str, Any]
-    expected: Any
+    expected: Any = None
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def label_available(self) -> bool:
+        """Whether this case carries a public label usable by fitting code."""
+        return bool(self.metadata.get("label_available", self.expected is not None))
 
 
 @dataclass(frozen=True, slots=True)

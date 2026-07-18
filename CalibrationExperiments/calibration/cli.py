@@ -6,7 +6,9 @@ import json
 from pathlib import Path
 
 from calibration.config import CalibrationSettings
+from calibration.datasets.base import validate_adapter
 from calibration.datasets.jsonl import JsonlDatasetAdapter
+from calibration.datasets.registry import DatasetAcquirer, DatasetRegistry
 from calibration.manifest import load_manifest
 from calibration.preflight import run_preflight
 from calibration.runner.runner import CalibrationRunner
@@ -45,6 +47,13 @@ def build_parser() -> argparse.ArgumentParser:
     preflight.add_argument("--output", type=Path, default=Path("preflight.json"))
     preflight.add_argument("--canary", action="store_true")
     preflight.add_argument("--approval-artifact", type=Path)
+    prepare = subparsers.add_parser("prepare-dataset", help="Acquire and hash a registry dataset")
+    prepare.add_argument("registry", type=Path)
+    prepare.add_argument("dataset_id")
+    prepare.add_argument("--cache", type=Path, default=Path(".calibration-runs/datasets"))
+    prepare.add_argument("--offline", action="store_true")
+    check = subparsers.add_parser("check-adapter", help="Run the canonical adapter conformance suite")
+    check.add_argument("manifest", type=Path)
     return parser
 
 
@@ -101,6 +110,23 @@ def main() -> None:
         print(json.dumps(report.to_json(), indent=2, sort_keys=True))
         if not report.passed:
             raise SystemExit(1)
+        return
+
+    if arguments.command == "prepare-dataset":
+        spec = DatasetRegistry.from_file(arguments.registry).get(arguments.dataset_id)
+        prepared = DatasetAcquirer(arguments.cache).prepare(spec, offline=arguments.offline)
+        print(json.dumps(prepared.to_json(), indent=2, sort_keys=True))
+        return
+
+    if arguments.command == "check-adapter":
+        manifest = load_manifest(arguments.manifest)
+        if manifest.dataset.adapter != "jsonl":
+            raise SystemExit(f"No built-in adapter for {manifest.dataset.adapter}")
+        adapter = JsonlDatasetAdapter(
+            manifest.dataset, manifest_directory=arguments.manifest.resolve().parent
+        )
+        adapter.prepare()
+        print(json.dumps(validate_adapter(adapter, manifest.dataset.split).to_json(), indent=2, sort_keys=True))
         return
 
     if arguments.command != "run":

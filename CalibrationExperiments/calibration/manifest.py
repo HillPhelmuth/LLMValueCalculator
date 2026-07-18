@@ -68,6 +68,7 @@ class ScorerLock(StrictModel):
     name: str = Field(min_length=1)
     version: str = Field(min_length=1)
     implementation_hash: str = Field(min_length=1)
+    configuration_hash: str | None = None
 
 
 class DatasetConfig(StrictModel):
@@ -112,6 +113,7 @@ class ExperimentManifest(StrictModel):
     scorers: tuple[str, ...]
     prompt_hashes: tuple[str, ...] = ()
     scorer_versions: dict[str, str] = Field(default_factory=dict)
+    scorer_configs: dict[str, dict[str, Any]] = Field(default_factory=dict)
     routing: RoutingConfig = Field(default_factory=RoutingConfig)
     budgets: BudgetConfig = Field(default_factory=BudgetConfig)
     holdouts: HoldoutConfig = Field(default_factory=HoldoutConfig)
@@ -185,6 +187,13 @@ class ExperimentManifest(StrictModel):
                 "name": name,
                 "version": self.scorer_versions.get(name, "registry"),
                 "implementation_hash": hashlib.sha256(name.encode("utf-8")).hexdigest(),
+                "configuration_hash": hashlib.sha256(
+                    json.dumps(
+                        self.scorer_configs.get(name, {}),
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ).encode("utf-8")
+                ).hexdigest(),
             }
             for name in self.scorers
         ]

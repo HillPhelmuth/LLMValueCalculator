@@ -14,6 +14,8 @@ from calibration.models import CanonicalCase, CaseFeatures, Message
 class JsonlDatasetAdapter(DatasetAdapter):
     """Small deterministic adapter used by smoke runs and local datasets."""
 
+    adapter_version = "jsonl-1.0.0"
+
     def __init__(self, config: DatasetConfig, manifest_directory: Path) -> None:
         self._config = config
         raw_path = config.options.get("path")
@@ -43,15 +45,22 @@ class JsonlDatasetAdapter(DatasetAdapter):
                 try:
                     case_id = str(row["case_id"])
                     prompt = str(row["prompt"])
-                    expected = row["expected"]
                 except KeyError as error:
                     raise ValueError(
                         f"Missing {error.args[0]!r} on line {line_number} of {self._path}"
                     ) from error
+                if "expected" not in row and row.get("label_available", True):
+                    raise ValueError(
+                        f"Missing public label on line {line_number} of {self._path}; "
+                        "set label_available: false for unlabeled holdouts"
+                    )
+                expected = row.get("expected")
 
                 metadata = row.get("metadata", {})
                 if not isinstance(metadata, dict):
                     raise ValueError(f"metadata must be an object on line {line_number}")
+                if "label_available" in row:
+                    metadata = {**metadata, "label_available": bool(row["label_available"])}
 
                 yield CanonicalCase(
                     case_id=case_id,
@@ -102,4 +111,3 @@ class JsonlDatasetAdapter(DatasetAdapter):
 
 def _string_or_none(value: Any) -> str | None:
     return None if value is None else str(value)
-

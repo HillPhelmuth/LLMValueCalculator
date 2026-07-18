@@ -374,7 +374,7 @@ Added the `preflight` CLI command and machine-readable report covering credentia
 
 ## Phase 3: Dataset, prompt, perturbation, and scoring platform
 
-### - [ ] T018 - Build the dataset registry and acquisition pipeline
+### - [x] T018 - Build the dataset registry and acquisition pipeline
 
 **Description**
 
@@ -393,9 +393,9 @@ Create registry metadata, preparation scripts, hash verification, local caching,
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Implemented `DatasetSpec`, `DatasetRegistry`, and `DatasetAcquirer` with reviewed source/license metadata, SHA-256 revision locks, atomic downloads, immutable revision-addressed caching, offline reuse, license notices, and preparation lock files. Added the `prepare-dataset` CLI command and contract tests for hash verification and cache reuse.
 
-### - [ ] T019 - Finalize the canonical dataset-adapter contract
+### - [x] T019 - Finalize the canonical dataset-adapter contract
 
 **Description**
 
@@ -414,9 +414,9 @@ Create a registry and conformance test suite, add typed canonical cases and feat
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Strengthened the provider-neutral `DatasetAdapter` contract with adapter versions and `validate_adapter()` conformance checks for deterministic case IDs/order, metadata completeness, stable rendering, and non-empty splits. The JSONL adapter now supports explicit unlabeled rows without fabricating holdout labels; `check-adapter` exposes the conformance suite from the CLI.
 
-### - [ ] T020 - Implement deterministic sampling and holdout freezing
+### - [x] T020 - Implement deterministic sampling and holdout freezing
 
 **Description**
 
@@ -435,9 +435,9 @@ Implement stratified sampling, materialize membership locks, hash them, separate
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added deterministic stratified sampling, explicit fit/holdout membership locks, materialized ID files, membership hashes, holdout dataset locks, label-hiding views, and exact/near-duplicate leakage checks. Runner queue construction honors manifest `sample_ids`, preventing seed-only regeneration from changing a locked sample.
 
-### - [ ] T021 - Build the prompt registry and rendering locks
+### - [x] T021 - Build the prompt registry and rendering locks
 
 **Description**
 
@@ -456,9 +456,9 @@ Store templates as data files, use a deterministic renderer, forbid runtime time
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added a data-backed `PromptRegistry` with prompt IDs, semantic versions, task families, supported conditions/features, tools, response schemas, content hashes, deterministic variable rendering, and rendered-message hashes. Escaping, missing variables, ordering, and baseline-condition requirements are validated; a prompt registry template is included.
 
-### - [ ] T022 - Implement the paired-condition perturbation framework
+### - [x] T022 - Implement the paired-condition perturbation framework
 
 **Description**
 
@@ -477,9 +477,9 @@ Create a perturbation protocol and registry, implement composable transforms, pe
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Implemented versioned treatment specifications, deterministic derived seeds, registered composable transforms, stable parent/variant IDs, treatment metadata, output hashes, invariant checks, and paired work grouping. Whitespace and choice-order transforms are included with repeatability and answer-invariance tests.
 
-### - [ ] T023 - Complete the deterministic scorer registry
+### - [x] T023 - Complete the deterministic scorer registry
 
 **Description**
 
@@ -498,9 +498,9 @@ Separate metric values from success decisions, implement benchmark-published nor
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Expanded the scorer registry with normalized exact match, token F1, classification accuracy, field comparison, supporting-fact recall, retrieval recall, nDCG, JSON-schema validity, and semantic structured-value comparison. Registry locks include implementation and configuration hashes, scores retain detailed metric payloads, and duplicate scorer keys are rejected.
 
-### - [ ] T024 - Implement executable and state-based scorers
+### - [x] T024 - Implement executable and state-based scorers
 
 **Description**
 
@@ -519,9 +519,9 @@ Build benchmark-specific runner images and state comparators, emit structured te
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added structured executable reports with test-group fractions, critical-test fractions, timeout/resource/policy/infrastructure outcomes, and deterministic code scoring. Added tool/state scoring for expected calls, arguments, ordering, and final state while keeping infrastructure failures distinct from model failures.
 
-### - [ ] T025 - Build network-disabled execution sandboxes
+### - [x] T025 - Build network-disabled execution sandboxes
 
 **Description**
 
@@ -540,9 +540,9 @@ Create minimal images for APPS, BigCodeBench, BFCL, tau-bench, and JSON tooling;
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Implemented a Docker sandbox policy and runner requiring digest-pinned, vulnerability-scan-locked images; network `none`, read-only roots, dropped capabilities, no-new-privileges, no host mounts, ephemeral no-exec scratch, and CPU/memory/process/disk/wall limits. Results classify timeout, resource exhaustion, and infrastructure failures separately; policy and command-construction tests cover escape-safety controls.
 
-### - [ ] T026 - Define failure taxonomy and criticality labeling
+### - [x] T026 - Define failure taxonomy and criticality labeling
 
 **Description**
 
@@ -561,9 +561,9 @@ Create enums and precedence rules, add dataset-specific critical-field metadata,
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added versioned failure and outcome enums covering provider, truncation, refusal, parse, schema, semantic, grounding, tool, policy, state, and infrastructure failures. Precedence-based criticality policies produce one unambiguous final outcome while retaining all detailed scorer metrics and validator metadata.
 
-### - [ ] T027 - Validate any model-based judge before use
+### - [x] T027 - Validate any model-based judge before use
 
 **Description**
 
@@ -582,7 +582,7 @@ Use the same OpenRouter and OpenAI SDK adapter, freeze a separate judge model lo
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added separately locked judge configuration, prompt/model/repeat versioning, blinded-label validation metrics for sensitivity, specificity, calibration error, subgroup error, pass/fail gating, judge-error uncertainty intervals, and OpenRouter-compatible judge requests. Intelligence-curve safety checks require a deterministic scorer before a judge can be relied upon.
 
 ## Phase 4: Experiment execution and parameter decisions
 

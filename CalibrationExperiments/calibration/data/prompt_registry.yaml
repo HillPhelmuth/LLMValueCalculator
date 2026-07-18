@@ -1,0 +1,9 @@
+prompts:
+  - prompt_id: smoke-v1
+    version: 1.0.0
+    task_family: exact-answer
+    conditions: [baseline]
+    messages:
+      - role: user
+        content: "{prompt}"
+    supported_features: [deterministic, free_text]

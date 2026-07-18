@@ -31,7 +31,7 @@ from calibration.providers.retry import (
 from calibration.providers.routing import build_provider_policy
 from calibration.runner.limiter import AsyncTokenBucket
 from calibration.scorers.base import Scorer
-from calibration.scorers.deterministic import ExactMatchScorer, TokenF1Scorer
+from calibration.scorers.registry import ScorerRegistry
 from calibration.storage.artifacts import ArtifactStore
 from calibration.storage.sqlite import SqliteRunStore
 
@@ -70,9 +70,9 @@ class CalibrationRunner:
             self.providers = configured
         else:
             self.providers = providers
-        self.scorers = scorers or {
-            "answer_exact_match": ExactMatchScorer(),
-            "answer_token_f1": TokenF1Scorer(),
+        self.scorer_registry = ScorerRegistry(scorers)
+        self.scorers = {
+            name: self.scorer_registry.get(name) for name in manifest.scorers
         }
         self.catalog = catalog
         self.max_workers = max_workers
@@ -107,6 +107,12 @@ class CalibrationRunner:
     ) -> dict[str, object]:
         self.dataset.prepare()
         cases = list(self.dataset.cases(self.manifest.dataset.split))
+        if self.manifest.dataset.sample_ids:
+            by_id = {case.case_id: case for case in cases}
+            missing = sorted(set(self.manifest.dataset.sample_ids) - set(by_id))
+            if missing:
+                raise ValueError(f"Locked sample IDs are missing from the dataset: {missing}")
+            cases = [by_id[case_id] for case_id in self.manifest.dataset.sample_ids]
         if max_cases is not None:
             cases = cases[:max_cases]
         self._validate_cases(cases)
@@ -279,6 +285,9 @@ class CalibrationRunner:
             self.scorers[name].score(item.case, response)
             for name in self.manifest.scorers
         ) + self.dataset.score(item.case, response)
+        score_keys = [(score.scorer_name, score.scorer_version) for score in scores]
+        if len(score_keys) != len(set(score_keys)):
+            raise ValueError("Scorer registry produced duplicate score keys")
         self.store.record_attempt_with_scores(
             run_id=run_id,
             case_id=item.case.case_id,
