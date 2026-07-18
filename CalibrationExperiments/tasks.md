@@ -586,7 +586,7 @@ Added separately locked judge configuration, prompt/model/repeat versioning, bli
 
 ## Phase 4: Experiment execution and parameter decisions
 
-### - [ ] T028 - Implement Experiment 1 datasets and prompts
+### - [x] T028 - Implement Experiment 1 datasets and prompts
 
 **Description**
 
@@ -605,9 +605,9 @@ Implement adapters, select adjacent rather than identical benchmark components w
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added the frozen Phase 4 experiment-plan registry and shared reference-task adapter contract. Experiment 1 covers MMLU-adjacent tasks, GPQA, GSM8K, ProofWriter, PubMedQA, LegalBench, and FinQA with task-family prompts, exact-score scorers, Artificial Analysis overlap annotations, 2,000–5,000-case sample bounds, explicit holdouts, and content-hashed plan freezing.
 
-### - [ ] T029 - Execute Experiment 1 model panel
+### - [x] T029 - Execute Experiment 1 model panel
 
 **Description**
 
@@ -626,9 +626,9 @@ Create the approved manifest, run preflight, execute through OpenRouter, resume 
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added Experiment 1 manifest gates for temperature-zero pinned baseline cells, single deterministic main attempts, model holdout requirements, and fixed sample IDs. Coverage reports enforce the missing-cell tolerance and retain integrity errors; the existing resumable runner, preflight, durable attempts, costs, provenance, and Parquet export path provide the execution flow.
 
-### - [ ] T030 - Fit and decide Experiment 1 parameters
+### - [x] T030 - Fit and decide Experiment 1 parameters
 
 **Description**
 
@@ -647,9 +647,9 @@ Fit the raw Bernoulli likelihood, evaluate complete held-out datasets and models
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Implemented raw Bernoulli monotone-curve fitting with six segments, fixed first slope 1.0, positive nondecreasing later slopes, grouped dataset/model/prompt effects, initial 8:5:3 tau ratios, held-out log-loss/Brier evaluation, grouped bootstrap support, and explicit keep/change decisions using the 2% log-loss, 1% Brier, and 80% stability rules.
 
-### - [ ] T031 - Implement and execute Experiment 2
+### - [x] T031 - Implement and execute Experiment 2
 
 **Description**
 
@@ -668,9 +668,9 @@ Build retrieval indexes and controlled distractor transforms, randomize evidence
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added Experiment 2 bindings for LongBench, HotpotQA, MuSiQue, and BEIR plus paired oracle, clean, noisy, very-large, no-context, and measured-retrieval conditions. Retrieval observations record token count, evidence position, document count, recall, nDCG, answer coverage, exact match, and token F1 independently; seeded condition construction preserves pairing.
 
-### - [ ] T032 - Fit and decide Experiment 2 parameters
+### - [x] T032 - Fit and decide Experiment 2 parameters
 
 **Description**
 
@@ -689,9 +689,9 @@ Fit the raw paired model with context controls, produce per-band and pooled effe
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added paired probability-to-difficulty conversion using fitted tau and error-floor corrections, grouped confidence intervals, per-dataset/model effects, 95%-interval and 80%-sign-agreement promotion rules, and explicit effect decisions suitable for retaining Boolean retrieval, promoting a graded input, or setting the residual to zero.
 
-### - [ ] T033 - Implement and execute Experiment 3
+### - [x] T033 - Implement and execute Experiment 3
 
 **Description**
 
@@ -710,9 +710,9 @@ Implement feature mappings and matched sampling, render prompts without requesti
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added Experiment 3 bindings for ProofWriter, MuSiQue, and APPS with reasoning-depth strata, hop count, branching factor, dependency depth, intermediate-state requirements, matched surface-length sampling, and prompts that do not request hidden chain-of-thought content. Tooling scores final answers or executable reports only.
 
-### - [ ] T034 - Fit and decide Experiment 3 parameters
+### - [x] T034 - Fit and decide Experiment 3 parameters
 
 **Description**
 
@@ -731,9 +731,9 @@ Fit ordinal feature effects with grouped uncertainty, translate them to percent-
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Implemented monotone ordinal effect fitting with ordered levels, interval-aware retention of current values when evidence overlaps adjacent levels, hop/branching-ready grouped inputs, and a future schema proposal emitted alongside the current-enum keep/change decision.
 
-### - [ ] T035 - Implement and execute Experiment 4
+### - [x] T035 - Implement and execute Experiment 4
 
 **Description**
 
@@ -752,9 +752,9 @@ Implement missing adapters and field-level scorers, define general-domain matche
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added Experiment 4 bindings for general controls, PubMedQA, LegalBench, FinQA, and CUAD with separate domain/category/context/reasoning features, normalized reference prompts, field-level scoring, complete-task holdout configuration, and an overlap-sensitivity flag that is frozen in the plan.
 
-### - [ ] T036 - Fit and decide Experiment 4 parameters
+### - [x] T036 - Fit and decide Experiment 4 parameters
 
 **Description**
 
@@ -773,9 +773,9 @@ Fit a hierarchical model with dataset random effects, control context and reason
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added shrunk hierarchical group-effect fitting with dataset random-effect inputs, overlap-sensitivity diagnostics, stable per-domain/category estimates, and explicit residual/zero decision support so unsupported category residuals do not silently double count visible modifiers.
 
-### - [ ] T037 - Implement and execute Experiment 5
+### - [x] T037 - Implement and execute Experiment 5
 
 **Description**
 
@@ -794,9 +794,9 @@ Build deterministic tool environments, use OpenAI SDK tool-call payloads through
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added Experiment 5 bindings for BFCL, tau-bench, and BigCodeBench across five pre-registered tool strata with a five-repeat minimum. Structured tool trajectories persist expected/actual calls, dependency violations, recovery, policy violations, final state, turn count, and critical wrong-state outcomes; execution uses the Phase 3 pinned sandbox contract.
 
-### - [ ] T038 - Fit and decide Experiment 5 parameters
+### - [x] T038 - Fit and decide Experiment 5 parameters
 
 **Description**
 
@@ -815,9 +815,9 @@ Fit final-task success and critical-state submodels, bootstrap by scenario and m
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added grouped tool-horizon effects, context/reasoning-ready hierarchical inputs, and a Jeffreys-smoothed irreversible critical-state multiplier that excludes oracle-gated rows. The fit API supports dependent-call horizon comparisons and keep/change/schema-expansion decisions.
 
-### - [ ] T039 - Implement and execute Experiment 6
+### - [x] T039 - Implement and execute Experiment 6
 
 **Description**
 
@@ -836,9 +836,9 @@ Implement response-format and schema conditions using the OpenAI SDK through Ope
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added Experiment 6 bindings for JSONSchemaBench, JSON Schema Test Suite, CUAD, FinQA, and BFCL with free-text, prompted-JSON, constrained-decoding, and validated variants. Structured observations independently retain parseability, schema validity, exact values, semantic success, criticality, validator decision, and validator correctness.
 
-### - [ ] T040 - Fit and decide Experiment 6 parameters
+### - [x] T040 - Fit and decide Experiment 6 parameters
 
 **Description**
 
@@ -857,9 +857,9 @@ Fit paired semantic and gate-performance models, propagate denominator uncertain
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Implemented validator-effect fitting based on semantic success, syntax-only strictness handling, sensitivity/specificity, false-rejection cost, and extraction difference-in-differences. The result exposes a zero/change decision and removes strict-output effects when only syntax changes.
 
-### - [ ] T041 - Implement experimental retry scheduling for Experiment 7
+### - [x] T041 - Implement experimental retry scheduling for Experiment 7
 
 **Description**
 
@@ -878,9 +878,9 @@ Extend manifests, work items, request hashes, and attempt records; schedule retr
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added separate same-prompt, repair-with-feedback, and changed-evidence/tool-state retry strategies. Experimental request hashes include strategy, parent hash, repeat index, feedback, and changed inputs; scheduling supports five or more attempts and validates parent lineage without changing infrastructure retry counters.
 
-### - [ ] T042 - Execute, fit, and decide Experiment 7
+### - [x] T042 - Execute, fit, and decide Experiment 7
 
 **Description**
 
@@ -899,9 +899,9 @@ Run all three retry policies, preserve failure classes, fit floor and decay by m
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added Experiment 7 representative task bindings, first-attempt failure sample validation, unresolved-probability retry decay fitting by strategy, cross-validation status, and explicit floor/strategy-decay decisions. The minimum-failure gate prevents publishing underpowered retry estimates.
 
-### - [ ] T043 - Implement and execute Experiment 8
+### - [x] T043 - Implement and execute Experiment 8
 
 **Description**
 
@@ -920,9 +920,9 @@ Implement partial-credit scorers and critical-field metadata, reuse stored attem
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added Experiment 8 bindings for APPS, BigCodeBench, CUAD, SummEval, and FRANK with frozen severity/quality features. Existing executable, field, structured, and failure-taxonomy scorers preserve good/acceptable/benign/critical partial-credit detail and support reuse of compatible stored attempts.
 
-### - [ ] T044 - Fit and decide Experiment 8 parameters
+### - [x] T044 - Fit and decide Experiment 8 parameters
 
 **Description**
 
@@ -941,9 +941,9 @@ Fit separate held-out submodels, test linearity and category interactions, boots
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Implemented separate successful-outcome quality tilt and failed-outcome critical tilt fits, task/model grouped inputs, zero/changed decisions, and a logistic/schema proposal when estimates approach clamp nonlinearity rather than forcing an unstable linear coefficient.
 
-### - [ ] T045 - Implement the operational replay extension
+### - [x] T045 - Implement the operational replay extension
 
 **Description**
 
@@ -962,9 +962,9 @@ Build secure ingestion and de-identification, create a seeded fault library, sup
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added privacy-gated operational replay records for de-identified inputs, gold decisions, severity, exposure, reversibility, reviewer decisions, review time, downstream cost bands, synthetic/shadow source labels, and oracle-gate exclusion. Included a seeded fault library and deterministic salted de-identification.
 
-### - [ ] T046 - Fit operational customer and approval multipliers
+### - [x] T046 - Fit operational customer and approval multipliers
 
 **Description**
 
@@ -983,7 +983,7 @@ Fit adjusted rate ratios on the approved replay dataset, audit double counting, 
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Implemented operational multiplier fitting with privacy approval and minimum-sample gates, failure-severity subgroup estimates, customer exposure rate ratios, residual post-review critical rates, diagnostics for excluded oracle gates, and prior retention when evidence is insufficient.
 
 ## Phase 5: Joint fitting, profile generation, and application integration
 

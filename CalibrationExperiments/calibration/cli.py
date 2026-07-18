@@ -9,6 +9,7 @@ from calibration.config import CalibrationSettings
 from calibration.datasets.base import validate_adapter
 from calibration.datasets.jsonl import JsonlDatasetAdapter
 from calibration.datasets.registry import DatasetAcquirer, DatasetRegistry
+from calibration.experiments import write_experiment_plan_registry
 from calibration.manifest import load_manifest
 from calibration.preflight import run_preflight
 from calibration.runner.runner import CalibrationRunner
@@ -54,6 +55,8 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--offline", action="store_true")
     check = subparsers.add_parser("check-adapter", help="Run the canonical adapter conformance suite")
     check.add_argument("manifest", type=Path)
+    plans = subparsers.add_parser("freeze-plans", help="Freeze the pre-registered Phase 4 experiment plans")
+    plans.add_argument("--output", type=Path, default=Path("calibration/data/experiment_plans.json"))
     return parser
 
 
@@ -127,6 +130,11 @@ def main() -> None:
         )
         adapter.prepare()
         print(json.dumps(validate_adapter(adapter, manifest.dataset.split).to_json(), indent=2, sort_keys=True))
+        return
+
+    if arguments.command == "freeze-plans":
+        registry_hash = write_experiment_plan_registry(arguments.output)
+        print(json.dumps({"output": str(arguments.output), "registry_hash": registry_hash}, indent=2, sort_keys=True))
         return
 
     if arguments.command != "run":

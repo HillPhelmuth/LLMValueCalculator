@@ -70,6 +70,10 @@ class ProviderRequest:
     tool_choice: Any = None
     response_format: dict[str, Any] | None = None
     provider_routing: dict[str, Any] = field(default_factory=dict)
+    experimental_strategy: str | None = None
+    parent_request_hash: str | None = None
+    experimental_feedback: dict[str, Any] = field(default_factory=dict)
+    changed_inputs: dict[str, Any] = field(default_factory=dict)
 
     @property
     def canonical_json(self) -> str:

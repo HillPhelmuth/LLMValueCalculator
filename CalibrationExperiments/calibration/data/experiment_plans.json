@@ -1,0 +1,960 @@
+{
+  "plans": {
+    "experiment-1": {
+      "conditions": [
+        {
+          "condition_id": "baseline",
+          "paired": true,
+          "requires_retrieval": false,
+          "requires_validation": false,
+          "treatment": "pinned_reference_prompt"
+        }
+      ],
+      "datasets": [
+        {
+          "adapter": "reference-task",
+          "dataset_id": "mmlu_adjacent",
+          "overlap_with_artificial_analysis": "adjacent_components_only",
+          "prompt_id": "experiment-1-knowledge-v1",
+          "published_metric": null,
+          "required_features": [
+            "category",
+            "verifiability_band",
+            "output_band"
+          ],
+          "scorers": [
+            "answer_exact_match",
+            "answer_token_f1"
+          ],
+          "task_family": "knowledge"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "gpqa",
+          "overlap_with_artificial_analysis": "documented_component_overlap",
+          "prompt_id": "experiment-1-knowledge-v1",
+          "published_metric": null,
+          "required_features": [
+            "category",
+            "verifiability_band",
+            "output_band"
+          ],
+          "scorers": [
+            "answer_exact_match",
+            "answer_token_f1"
+          ],
+          "task_family": "knowledge"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "gsm8k",
+          "overlap_with_artificial_analysis": "documented_component_overlap",
+          "prompt_id": "experiment-1-math-v1",
+          "published_metric": null,
+          "required_features": [
+            "category",
+            "verifiability_band",
+            "output_band"
+          ],
+          "scorers": [
+            "answer_exact_match",
+            "answer_token_f1"
+          ],
+          "task_family": "math"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "proofwriter",
+          "overlap_with_artificial_analysis": "adjacent_components_only",
+          "prompt_id": "experiment-1-logic-v1",
+          "published_metric": null,
+          "required_features": [
+            "category",
+            "verifiability_band",
+            "output_band"
+          ],
+          "scorers": [
+            "answer_exact_match",
+            "answer_token_f1"
+          ],
+          "task_family": "logic"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "pubmedqa",
+          "overlap_with_artificial_analysis": "documented_component_overlap",
+          "prompt_id": "experiment-1-domain-v1",
+          "published_metric": null,
+          "required_features": [
+            "category",
+            "verifiability_band",
+            "output_band"
+          ],
+          "scorers": [
+            "answer_exact_match",
+            "answer_token_f1"
+          ],
+          "task_family": "domain"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "legalbench",
+          "overlap_with_artificial_analysis": "adjacent_components_only",
+          "prompt_id": "experiment-1-domain-v1",
+          "published_metric": null,
+          "required_features": [
+            "category",
+            "verifiability_band",
+            "output_band"
+          ],
+          "scorers": [
+            "answer_exact_match",
+            "answer_token_f1"
+          ],
+          "task_family": "domain"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "finqa",
+          "overlap_with_artificial_analysis": "adjacent_components_only",
+          "prompt_id": "experiment-1-domain-v1",
+          "published_metric": null,
+          "required_features": [
+            "category",
+            "verifiability_band",
+            "output_band"
+          ],
+          "scorers": [
+            "answer_exact_match",
+            "answer_token_f1"
+          ],
+          "task_family": "domain"
+        }
+      ],
+      "experiment_id": "experiment-1",
+      "holdout_fraction": 0.2,
+      "metadata": {
+        "overlap_documentation": "dataset binding overlap fields are frozen with the plan"
+      },
+      "model_holdout_fraction": 0.25,
+      "no_hidden_reasoning": true,
+      "overlap_sensitivity": false,
+      "repeat_count": 1,
+      "required_features": [
+        "category",
+        "verifiability_band",
+        "output_band"
+      ],
+      "sample_max": 5000,
+      "sample_min": 2000,
+      "title": "Exact-score intelligence curve and tau calibration"
+    },
+    "experiment-2": {
+      "conditions": [
+        {
+          "condition_id": "oracle",
+          "paired": true,
+          "requires_retrieval": false,
+          "requires_validation": false,
+          "treatment": "oracle"
+        },
+        {
+          "condition_id": "clean",
+          "paired": true,
+          "requires_retrieval": true,
+          "requires_validation": false,
+          "treatment": "clean"
+        },
+        {
+          "condition_id": "noisy",
+          "paired": true,
+          "requires_retrieval": true,
+          "requires_validation": false,
+          "treatment": "noisy"
+        },
+        {
+          "condition_id": "very_large",
+          "paired": true,
+          "requires_retrieval": true,
+          "requires_validation": false,
+          "treatment": "very_large"
+        },
+        {
+          "condition_id": "no_context",
+          "paired": true,
+          "requires_retrieval": false,
+          "requires_validation": false,
+          "treatment": "no_context"
+        },
+        {
+          "condition_id": "measured_retrieval",
+          "paired": true,
+          "requires_retrieval": true,
+          "requires_validation": false,
+          "treatment": "measured_retrieval"
+        }
+      ],
+      "datasets": [
+        {
+          "adapter": "reference-task",
+          "dataset_id": "longbench",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-2-retrieval-v1",
+          "published_metric": null,
+          "required_features": [
+            "context_band",
+            "verifiability_band"
+          ],
+          "scorers": [
+            "answer_exact_match",
+            "answer_token_f1",
+            "supporting_fact_recall"
+          ],
+          "task_family": "retrieval"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "hotpotqa",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-2-retrieval-v1",
+          "published_metric": null,
+          "required_features": [
+            "context_band",
+            "verifiability_band"
+          ],
+          "scorers": [
+            "answer_exact_match",
+            "answer_token_f1",
+            "supporting_fact_recall"
+          ],
+          "task_family": "retrieval"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "musique",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-2-retrieval-v1",
+          "published_metric": null,
+          "required_features": [
+            "context_band",
+            "verifiability_band"
+          ],
+          "scorers": [
+            "answer_exact_match",
+            "answer_token_f1",
+            "supporting_fact_recall"
+          ],
+          "task_family": "retrieval"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "beir",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-2-retrieval-v1",
+          "published_metric": null,
+          "required_features": [
+            "context_band",
+            "verifiability_band"
+          ],
+          "scorers": [
+            "answer_exact_match",
+            "answer_token_f1",
+            "supporting_fact_recall"
+          ],
+          "task_family": "retrieval"
+        }
+      ],
+      "experiment_id": "experiment-2",
+      "holdout_fraction": 0.2,
+      "metadata": {
+        "paired_conditions": true
+      },
+      "model_holdout_fraction": 0.0,
+      "no_hidden_reasoning": true,
+      "overlap_sensitivity": false,
+      "repeat_count": 1,
+      "required_features": [
+        "context_band",
+        "verifiability_band",
+        "evidence_position",
+        "document_count",
+        "retrieval_recall",
+        "retrieval_ndcg"
+      ],
+      "sample_max": 10000,
+      "sample_min": 1000,
+      "title": "Context and retrieval effects"
+    },
+    "experiment-3": {
+      "conditions": [
+        {
+          "condition_id": "depth-single_step",
+          "paired": true,
+          "requires_retrieval": false,
+          "requires_validation": false,
+          "treatment": "reasoning_depth"
+        },
+        {
+          "condition_id": "depth-shallow",
+          "paired": true,
+          "requires_retrieval": false,
+          "requires_validation": false,
+          "treatment": "reasoning_depth"
+        },
+        {
+          "condition_id": "depth-moderate",
+          "paired": true,
+          "requires_retrieval": false,
+          "requires_validation": false,
+          "treatment": "reasoning_depth"
+        },
+        {
+          "condition_id": "depth-deep",
+          "paired": true,
+          "requires_retrieval": false,
+          "requires_validation": false,
+          "treatment": "reasoning_depth"
+        }
+      ],
+      "datasets": [
+        {
+          "adapter": "reference-task",
+          "dataset_id": "proofwriter",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-3-reasoning-v1",
+          "published_metric": null,
+          "required_features": [
+            "reasoning_depth",
+            "output_band"
+          ],
+          "scorers": [
+            "answer_exact_match",
+            "answer_token_f1"
+          ],
+          "task_family": "reasoning"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "musique",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-3-reasoning-v1",
+          "published_metric": null,
+          "required_features": [
+            "reasoning_depth",
+            "output_band"
+          ],
+          "scorers": [
+            "answer_exact_match",
+            "answer_token_f1"
+          ],
+          "task_family": "reasoning"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "apps",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-3-reasoning-v1",
+          "published_metric": null,
+          "required_features": [
+            "reasoning_depth",
+            "output_band"
+          ],
+          "scorers": [
+            "answer_exact_match",
+            "answer_token_f1"
+          ],
+          "task_family": "reasoning"
+        }
+      ],
+      "experiment_id": "experiment-3",
+      "holdout_fraction": 0.2,
+      "metadata": {},
+      "model_holdout_fraction": 0.0,
+      "no_hidden_reasoning": true,
+      "overlap_sensitivity": false,
+      "repeat_count": 1,
+      "required_features": [
+        "reasoning_depth",
+        "hop_count",
+        "branching_factor",
+        "dependency_depth",
+        "intermediate_state"
+      ],
+      "sample_max": 10000,
+      "sample_min": 800,
+      "title": "Reasoning depth and branching"
+    },
+    "experiment-4": {
+      "conditions": [
+        {
+          "condition_id": "reference",
+          "paired": true,
+          "requires_retrieval": false,
+          "requires_validation": false,
+          "treatment": "domain_normalized"
+        }
+      ],
+      "datasets": [
+        {
+          "adapter": "reference-task",
+          "dataset_id": "general_controls",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-4-domain-v1",
+          "published_metric": null,
+          "required_features": [
+            "domain_band",
+            "category"
+          ],
+          "scorers": [
+            "answer_exact_match",
+            "field_level_comparison"
+          ],
+          "task_family": "domain"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "pubmedqa",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-4-domain-v1",
+          "published_metric": null,
+          "required_features": [
+            "domain_band",
+            "category"
+          ],
+          "scorers": [
+            "answer_exact_match",
+            "field_level_comparison"
+          ],
+          "task_family": "domain"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "legalbench",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-4-domain-v1",
+          "published_metric": null,
+          "required_features": [
+            "domain_band",
+            "category"
+          ],
+          "scorers": [
+            "answer_exact_match",
+            "field_level_comparison"
+          ],
+          "task_family": "domain"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "finqa",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-4-domain-v1",
+          "published_metric": null,
+          "required_features": [
+            "domain_band",
+            "category"
+          ],
+          "scorers": [
+            "answer_exact_match",
+            "field_level_comparison"
+          ],
+          "task_family": "domain"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "cuad",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-4-domain-v1",
+          "published_metric": null,
+          "required_features": [
+            "domain_band",
+            "category"
+          ],
+          "scorers": [
+            "answer_exact_match",
+            "field_level_comparison"
+          ],
+          "task_family": "domain"
+        }
+      ],
+      "experiment_id": "experiment-4",
+      "holdout_fraction": 0.2,
+      "metadata": {},
+      "model_holdout_fraction": 0.0,
+      "no_hidden_reasoning": true,
+      "overlap_sensitivity": true,
+      "repeat_count": 1,
+      "required_features": [
+        "domain_band",
+        "category",
+        "context_band",
+        "reasoning_depth"
+      ],
+      "sample_max": 10000,
+      "sample_min": 800,
+      "title": "Domain and task-category residuals"
+    },
+    "experiment-5": {
+      "conditions": [
+        {
+          "condition_id": "tool-stratum-1",
+          "paired": true,
+          "requires_retrieval": false,
+          "requires_validation": false,
+          "treatment": "tool_horizon"
+        },
+        {
+          "condition_id": "tool-stratum-2",
+          "paired": true,
+          "requires_retrieval": false,
+          "requires_validation": false,
+          "treatment": "tool_horizon"
+        },
+        {
+          "condition_id": "tool-stratum-3",
+          "paired": true,
+          "requires_retrieval": false,
+          "requires_validation": false,
+          "treatment": "tool_horizon"
+        },
+        {
+          "condition_id": "tool-stratum-4",
+          "paired": true,
+          "requires_retrieval": false,
+          "requires_validation": false,
+          "treatment": "tool_horizon"
+        },
+        {
+          "condition_id": "tool-stratum-5",
+          "paired": true,
+          "requires_retrieval": false,
+          "requires_validation": false,
+          "treatment": "tool_horizon"
+        }
+      ],
+      "datasets": [
+        {
+          "adapter": "reference-task",
+          "dataset_id": "bfcl",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-5-tools-v1",
+          "published_metric": null,
+          "required_features": [
+            "tool_horizon",
+            "criticality_band"
+          ],
+          "scorers": [
+            "tool_state"
+          ],
+          "task_family": "tool-use"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "tau_bench",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-5-tools-v1",
+          "published_metric": null,
+          "required_features": [
+            "tool_horizon",
+            "criticality_band"
+          ],
+          "scorers": [
+            "tool_state"
+          ],
+          "task_family": "tool-use"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "bigcodebench",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-5-tools-v1",
+          "published_metric": null,
+          "required_features": [
+            "tool_horizon",
+            "criticality_band"
+          ],
+          "scorers": [
+            "tool_state"
+          ],
+          "task_family": "tool-use"
+        }
+      ],
+      "experiment_id": "experiment-5",
+      "holdout_fraction": 0.2,
+      "metadata": {},
+      "model_holdout_fraction": 0.0,
+      "no_hidden_reasoning": true,
+      "overlap_sensitivity": false,
+      "repeat_count": 5,
+      "required_features": [
+        "tool_horizon",
+        "dependency_depth",
+        "turn_count",
+        "recovery",
+        "irreversible_state"
+      ],
+      "sample_max": 10000,
+      "sample_min": 500,
+      "title": "Tool use and agentic critical exposure"
+    },
+    "experiment-6": {
+      "conditions": [
+        {
+          "condition_id": "free_text",
+          "paired": true,
+          "requires_retrieval": false,
+          "requires_validation": false,
+          "treatment": "free_text"
+        },
+        {
+          "condition_id": "prompted_json",
+          "paired": true,
+          "requires_retrieval": false,
+          "requires_validation": false,
+          "treatment": "prompted_json"
+        },
+        {
+          "condition_id": "constrained_decoding",
+          "paired": true,
+          "requires_retrieval": false,
+          "requires_validation": false,
+          "treatment": "constrained_decoding"
+        },
+        {
+          "condition_id": "free_text_validated",
+          "paired": true,
+          "requires_retrieval": false,
+          "requires_validation": true,
+          "treatment": "free_text_validated"
+        },
+        {
+          "condition_id": "prompted_json_validated",
+          "paired": true,
+          "requires_retrieval": false,
+          "requires_validation": true,
+          "treatment": "prompted_json_validated"
+        },
+        {
+          "condition_id": "constrained_decoding_validated",
+          "paired": true,
+          "requires_retrieval": false,
+          "requires_validation": true,
+          "treatment": "constrained_decoding_validated"
+        }
+      ],
+      "datasets": [
+        {
+          "adapter": "reference-task",
+          "dataset_id": "jsonschemabench",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-6-json-v1",
+          "published_metric": null,
+          "required_features": [
+            "output_band",
+            "criticality_band"
+          ],
+          "scorers": [
+            "schema_validity",
+            "semantic_structured_value"
+          ],
+          "task_family": "structured-output"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "json_schema_test_suite",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-6-json-v1",
+          "published_metric": null,
+          "required_features": [
+            "output_band",
+            "criticality_band"
+          ],
+          "scorers": [
+            "schema_validity",
+            "semantic_structured_value"
+          ],
+          "task_family": "structured-output"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "cuad",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-6-json-v1",
+          "published_metric": null,
+          "required_features": [
+            "output_band",
+            "criticality_band"
+          ],
+          "scorers": [
+            "schema_validity",
+            "semantic_structured_value"
+          ],
+          "task_family": "structured-output"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "finqa",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-6-json-v1",
+          "published_metric": null,
+          "required_features": [
+            "output_band",
+            "criticality_band"
+          ],
+          "scorers": [
+            "schema_validity",
+            "semantic_structured_value"
+          ],
+          "task_family": "structured-output"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "bfcl",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-6-json-v1",
+          "published_metric": null,
+          "required_features": [
+            "output_band",
+            "criticality_band"
+          ],
+          "scorers": [
+            "schema_validity",
+            "semantic_structured_value"
+          ],
+          "task_family": "structured-output"
+        }
+      ],
+      "experiment_id": "experiment-6",
+      "holdout_fraction": 0.2,
+      "metadata": {},
+      "model_holdout_fraction": 0.0,
+      "no_hidden_reasoning": true,
+      "overlap_sensitivity": false,
+      "repeat_count": 1,
+      "required_features": [
+        "output_band",
+        "schema_validity",
+        "criticality_band"
+      ],
+      "sample_max": 10000,
+      "sample_min": 500,
+      "title": "Structured-output burden and validators"
+    },
+    "experiment-7": {
+      "conditions": [
+        {
+          "condition_id": "same_prompt",
+          "paired": false,
+          "requires_retrieval": false,
+          "requires_validation": false,
+          "treatment": "same_prompt"
+        },
+        {
+          "condition_id": "repair_feedback",
+          "paired": false,
+          "requires_retrieval": false,
+          "requires_validation": false,
+          "treatment": "repair_feedback"
+        },
+        {
+          "condition_id": "changed_evidence_or_tool_state",
+          "paired": false,
+          "requires_retrieval": false,
+          "requires_validation": false,
+          "treatment": "changed_evidence_or_tool_state"
+        }
+      ],
+      "datasets": [
+        {
+          "adapter": "reference-task",
+          "dataset_id": "proofwriter",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-7-retry-v1",
+          "published_metric": null,
+          "required_features": [],
+          "scorers": [
+            "answer_exact_match",
+            "tool_state",
+            "schema_validity"
+          ],
+          "task_family": "retry"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "hotpotqa",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-7-retry-v1",
+          "published_metric": null,
+          "required_features": [],
+          "scorers": [
+            "answer_exact_match",
+            "tool_state",
+            "schema_validity"
+          ],
+          "task_family": "retry"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "bfcl",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-7-retry-v1",
+          "published_metric": null,
+          "required_features": [],
+          "scorers": [
+            "answer_exact_match",
+            "tool_state",
+            "schema_validity"
+          ],
+          "task_family": "retry"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "json_extraction",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-7-retry-v1",
+          "published_metric": null,
+          "required_features": [],
+          "scorers": [
+            "answer_exact_match",
+            "tool_state",
+            "schema_validity"
+          ],
+          "task_family": "retry"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "apps",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-7-retry-v1",
+          "published_metric": null,
+          "required_features": [],
+          "scorers": [
+            "answer_exact_match",
+            "tool_state",
+            "schema_validity"
+          ],
+          "task_family": "retry"
+        }
+      ],
+      "experiment_id": "experiment-7",
+      "holdout_fraction": 0.2,
+      "metadata": {},
+      "model_holdout_fraction": 0.0,
+      "no_hidden_reasoning": true,
+      "overlap_sensitivity": false,
+      "repeat_count": 5,
+      "required_features": [],
+      "sample_max": 10000,
+      "sample_min": 500,
+      "title": "Retry dependence and systematic error floor"
+    },
+    "experiment-8": {
+      "conditions": [
+        {
+          "condition_id": "reference",
+          "paired": true,
+          "requires_retrieval": false,
+          "requires_validation": false,
+          "treatment": "failure-severity"
+        }
+      ],
+      "datasets": [
+        {
+          "adapter": "reference-task",
+          "dataset_id": "apps",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-8-quality-v1",
+          "published_metric": null,
+          "required_features": [
+            "criticality_band"
+          ],
+          "scorers": [
+            "code_execution",
+            "field_level_comparison",
+            "semantic_structured_value"
+          ],
+          "task_family": "partial-value"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "bigcodebench",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-8-quality-v1",
+          "published_metric": null,
+          "required_features": [
+            "criticality_band"
+          ],
+          "scorers": [
+            "code_execution",
+            "field_level_comparison",
+            "semantic_structured_value"
+          ],
+          "task_family": "partial-value"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "cuad",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-8-quality-v1",
+          "published_metric": null,
+          "required_features": [
+            "criticality_band"
+          ],
+          "scorers": [
+            "code_execution",
+            "field_level_comparison",
+            "semantic_structured_value"
+          ],
+          "task_family": "partial-value"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "summeval",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-8-quality-v1",
+          "published_metric": null,
+          "required_features": [
+            "criticality_band"
+          ],
+          "scorers": [
+            "code_execution",
+            "field_level_comparison",
+            "semantic_structured_value"
+          ],
+          "task_family": "partial-value"
+        },
+        {
+          "adapter": "reference-task",
+          "dataset_id": "frank",
+          "overlap_with_artificial_analysis": "not_assessed",
+          "prompt_id": "experiment-8-quality-v1",
+          "published_metric": null,
+          "required_features": [
+            "criticality_band"
+          ],
+          "scorers": [
+            "code_execution",
+            "field_level_comparison",
+            "semantic_structured_value"
+          ],
+          "task_family": "partial-value"
+        }
+      ],
+      "experiment_id": "experiment-8",
+      "holdout_fraction": 0.2,
+      "metadata": {},
+      "model_holdout_fraction": 0.0,
+      "no_hidden_reasoning": true,
+      "overlap_sensitivity": false,
+      "repeat_count": 1,
+      "required_features": [
+        "criticality_band",
+        "quality_share",
+        "critical_share"
+      ],
+      "sample_max": 10000,
+      "sample_min": 500,
+      "title": "Partial value and failure severity"
+    }
+  },
+  "registry_hash": "b260c39e3c117f3cd682cd734b0c169f583cf2843c4d3f56a6106dc2d88159c5"
+}
