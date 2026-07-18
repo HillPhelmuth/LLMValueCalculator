@@ -36,7 +36,9 @@ class RoutingConfig(StrictModel):
 class BudgetConfig(StrictModel):
     max_usd: float | None = Field(default=None, ge=0)
     max_requests: PositiveInt | None = None
+    max_tokens: PositiveInt | None = None
     max_retries: int = Field(default=0, ge=0)
+    approval_artifact: str | None = None
 
 
 class HoldoutConfig(StrictModel):
@@ -161,6 +163,9 @@ class ExperimentManifest(StrictModel):
         document = self.model_dump(mode="json")
         document["resolved"] = True
         document["source_manifest_hash"] = self.manifest_hash
+        from calibration.providers.routing import routing_manifest_fields
+
+        document["routing"] = routing_manifest_fields(self.routing)
         document["dataset"]["sample_ids"] = list(sample_ids)
         document["prompts"] = [
             prompt.model_dump(mode="json") for prompt in self.prompts

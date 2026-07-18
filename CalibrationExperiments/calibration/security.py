@@ -6,7 +6,7 @@ from typing import Any
 
 
 SECRET_KEY_PATTERN = re.compile(
-    r"(?:api[_-]?key|authorization|token|secret|password|credential|private[_-]?key)",
+    r"^(?:api[_-]?key|authorization|access[_-]?token|auth[_-]?token|token|secret|password|credential|private[_-]?key)$|(?:api[_-]?key|access[_-]?token|auth[_-]?token)$",
     re.IGNORECASE,
 )
 SECRET_VALUE_PATTERNS = (

@@ -21,7 +21,7 @@ from calibration.schema import SCHEMA_VERSION, validate_record
 from calibration.security import redact_text
 
 
-SCHEMA_MIGRATION_VERSION = 3
+SCHEMA_MIGRATION_VERSION = 4
 RUN_STATES = {"created", "running", "pausing", "completed", "failed", "cancelled"}
 
 
@@ -69,6 +69,10 @@ class SqliteRunStore:
         if current < 3:
             self._apply_export_schema()
             self._record_migration(3)
+            current = 3
+        if current < 4:
+            self._apply_provider_response_schema()
+            self._record_migration(4)
         self._connection.commit()
 
     def _apply_initial_schema(self) -> None:
@@ -115,6 +119,14 @@ class SqliteRunStore:
                 response_id TEXT NOT NULL,
                 from_cache INTEGER NOT NULL,
                 created_utc TEXT NOT NULL,
+                resolved_model TEXT,
+                resolved_provider TEXT,
+                endpoint TEXT,
+                content_json TEXT,
+                router_metadata_json TEXT NOT NULL DEFAULT '{}',
+                usage_json TEXT NOT NULL DEFAULT '{}',
+                calculated_cost REAL,
+                cost_reconciliation_json TEXT NOT NULL DEFAULT '{}',
                 UNIQUE(run_id, request_hash)
             );
 
@@ -241,6 +253,46 @@ class SqliteRunStore:
             """
         )
 
+    def _apply_provider_response_schema(self) -> None:
+        attempt_columns = {
+            "resolved_model": "TEXT",
+            "resolved_provider": "TEXT",
+            "endpoint": "TEXT",
+            "content_json": "TEXT",
+            "router_metadata_json": "TEXT NOT NULL DEFAULT '{}'",
+            "usage_json": "TEXT NOT NULL DEFAULT '{}'",
+            "calculated_cost": "REAL",
+            "cost_reconciliation_json": "TEXT NOT NULL DEFAULT '{}'",
+        }
+        current_columns = {
+            row[1] for row in self._connection.execute("PRAGMA table_info(attempts)")
+        }
+        for column, definition in attempt_columns.items():
+            if column not in current_columns:
+                self._connection.execute(
+                    f"ALTER TABLE attempts ADD COLUMN {column} {definition}"
+                )
+        self._connection.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS transport_events (
+                schema_version TEXT NOT NULL DEFAULT '1.0',
+                event_id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL REFERENCES runs(run_id),
+                request_hash TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                transport_attempt INTEGER NOT NULL,
+                event_type TEXT NOT NULL,
+                status_code INTEGER,
+                retry_after_seconds REAL,
+                delay_seconds REAL,
+                error_type TEXT,
+                error_message TEXT,
+                created_utc TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS ix_transport_events_run_id ON transport_events(run_id);
+            """
+        )
+
     def _migrate_legacy_database(self) -> None:
         """Upgrade the original pre-migration schema without discarding results."""
         columns = {
@@ -350,12 +402,16 @@ class SqliteRunStore:
         resolved_manifest: dict[str, Any] | None = None,
         provenance: RunProvenance | None = None,
         dependency_lock: str | Path | None = None,
+        catalog_snapshot_hash: str | None = None,
     ) -> str:
         identifier = run_id or str(uuid.uuid4())
         resolved = resolved_manifest or manifest.resolved(tuple(manifest.dataset.sample_ids))
         resolved_hash = str(resolved["resolved_manifest_hash"])
         provenance = provenance or build_run_provenance(
-            manifest, code_commit, dependency_lock=dependency_lock
+            manifest,
+            code_commit,
+            dependency_lock=dependency_lock,
+            catalog_snapshot_hash=catalog_snapshot_hash,
         )
         provenance = replace(
             provenance,
@@ -563,6 +619,64 @@ class SqliteRunStore:
         )
         self._connection.commit()
 
+    def record_transport_event(
+        self,
+        run_id: str,
+        request_hash: str,
+        provider: str,
+        transport_attempt: int,
+        event_type: str,
+        *,
+        status_code: int | None = None,
+        retry_after_seconds: float | None = None,
+        delay_seconds: float | None = None,
+        error_type: str | None = None,
+        error_message: str | None = None,
+    ) -> str:
+        event_id = str(uuid.uuid4())
+        event_record = {
+            "schema_version": SCHEMA_VERSION,
+            "event_id": event_id,
+            "run_id": run_id,
+            "request_hash": request_hash,
+            "provider": provider,
+            "transport_attempt": transport_attempt,
+            "event_type": event_type,
+            "status_code": status_code,
+            "retry_after_seconds": retry_after_seconds,
+            "delay_seconds": delay_seconds,
+            "error_type": error_type,
+            "error_message": error_message,
+            "created_utc": utc_now_iso(),
+        }
+        validate_record("transport_event", event_record)
+        with self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO transport_events (
+                    schema_version, event_id, run_id, request_hash, provider,
+                    transport_attempt, event_type, status_code, retry_after_seconds,
+                    delay_seconds, error_type, error_message, created_utc
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    SCHEMA_VERSION,
+                    event_id,
+                    run_id,
+                    request_hash,
+                    provider,
+                    transport_attempt,
+                    event_type,
+                    status_code,
+                    retry_after_seconds,
+                    delay_seconds,
+                    error_type,
+                    redact_text(error_message or "") or None,
+                    event_record["created_utc"],
+                ),
+            )
+        return event_id
+
     def create_work_item(self, run_id: str, request_hash: str) -> str:
         work_item_id = str(uuid.uuid4())
         self._connection.execute(
@@ -583,23 +697,40 @@ class SqliteRunStore:
         return str(row["work_item_id"])
 
     def claim_work_item(
-        self, run_id: str, owner: str, lease_seconds: int = 300
+        self,
+        run_id: str,
+        owner: str,
+        lease_seconds: int = 300,
+        *,
+        work_item_id: str | None = None,
     ) -> str | None:
         now = datetime.now(timezone.utc)
         expires = (now + timedelta(seconds=lease_seconds)).isoformat()
         now_text = now.isoformat()
         with self._connection:
-            row = self._connection.execute(
-                """
-                SELECT work_item_id FROM work_items
-                WHERE run_id = ? AND (
-                    status = 'pending' OR
-                    (status = 'leased' AND lease_expires_utc < ?)
-                )
-                ORDER BY created_utc, work_item_id LIMIT 1
-                """,
-                (run_id, now_text),
-            ).fetchone()
+            if work_item_id is None:
+                row = self._connection.execute(
+                    """
+                    SELECT work_item_id FROM work_items
+                    WHERE run_id = ? AND (
+                        status = 'pending' OR
+                        (status = 'leased' AND lease_expires_utc < ?)
+                    )
+                    ORDER BY created_utc, work_item_id LIMIT 1
+                    """,
+                    (run_id, now_text),
+                ).fetchone()
+            else:
+                row = self._connection.execute(
+                    """
+                    SELECT work_item_id FROM work_items
+                    WHERE run_id = ? AND work_item_id = ? AND (
+                        status = 'pending' OR
+                        (status = 'leased' AND lease_expires_utc < ?)
+                    )
+                    """,
+                    (run_id, work_item_id, now_text),
+                ).fetchone()
             if row is None:
                 return None
             self._connection.execute(
@@ -695,10 +826,18 @@ class SqliteRunStore:
             "provider_cost": response.provider_cost,
             "finish_reason": response.finish_reason,
             "refusal": response.refusal,
-            "response_id": response.response_id,
-            "from_cache": from_cache,
-            "created_utc": response.created_utc,
-        }
+                    "response_id": response.response_id,
+                    "from_cache": from_cache,
+                    "created_utc": response.created_utc,
+                    "resolved_model": response.resolved_model,
+                    "resolved_provider": response.resolved_provider,
+                    "endpoint": response.endpoint,
+                    "content": response.content,
+                    "router_metadata": response.router_metadata,
+                    "usage": response.usage,
+                    "calculated_cost": response.calculated_cost,
+                    "cost_reconciliation": response.cost_reconciliation,
+                }
         validate_record("attempt", attempt_record)
         for score in scores:
             validate_record(
@@ -728,8 +867,10 @@ class SqliteRunStore:
                     model_version, provider, prompt_version, repeat_index, parent_attempt_id,
                     request_hash, raw_request_uri, raw_response_uri, latency_ms,
                     token_counts_json, tool_calls_json, provider_cost, finish_reason,
-                    refusal, response_id, from_cache, created_utc
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    refusal, response_id, from_cache, created_utc, resolved_model,
+                    resolved_provider, endpoint, content_json, router_metadata_json,
+                    usage_json, calculated_cost, cost_reconciliation_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     SCHEMA_VERSION,
@@ -749,12 +890,20 @@ class SqliteRunStore:
                     response.latency_ms,
                     _json(token_counts),
                     _json(response.tool_calls),
-                    response.provider_cost,
+                    _money_float(response.provider_cost),
                     response.finish_reason,
                     int(response.refusal),
                     response.response_id,
                     int(from_cache),
                     response.created_utc,
+                    response.resolved_model,
+                    response.resolved_provider,
+                    response.endpoint,
+                    _json(response.content),
+                    _json(response.router_metadata),
+                    _json(response.usage),
+                    _money_float(response.calculated_cost),
+                    _json(response.cost_reconciliation),
                 ),
             )
             self._connection.executemany(
@@ -913,6 +1062,7 @@ class SqliteRunStore:
             "model_snapshots": "SELECT * FROM model_snapshots WHERE run_id=? ORDER BY catalog_id",
             "fitted_estimates": "SELECT * FROM fitted_estimates WHERE run_id=? ORDER BY estimate_id",
             "run_provenance": "SELECT schema_version, provenance_id, run_id, provenance_json FROM run_provenance WHERE run_id=?",
+            "transport_events": "SELECT * FROM transport_events WHERE run_id=? ORDER BY created_utc, event_id",
         }
         query = allowed.get(table)
         if query is None:
@@ -1034,3 +1184,7 @@ def _json(value: object) -> str:
 
 def _bool(value: bool | None) -> int | None:
     return None if value is None else int(value)
+
+
+def _money_float(value: Any) -> float | None:
+    return None if value is None else float(value)

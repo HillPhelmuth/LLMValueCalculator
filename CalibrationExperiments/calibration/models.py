@@ -4,6 +4,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any, Literal
 
 from calibration.schema import SCHEMA_VERSION
@@ -16,7 +17,7 @@ def utc_now_iso() -> str:
 @dataclass(frozen=True, slots=True)
 class Message:
     role: Literal["system", "user", "assistant", "tool"]
-    content: str
+    content: Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +61,10 @@ class ProviderRequest:
     prompt_version: str
     repeat_index: int
     schema_version: str = SCHEMA_VERSION
+    tools: tuple[dict[str, Any], ...] = ()
+    tool_choice: Any = None
+    response_format: dict[str, Any] | None = None
+    provider_routing: dict[str, Any] = field(default_factory=dict)
 
     @property
     def canonical_json(self) -> str:
@@ -82,23 +87,38 @@ class ProviderResponse:
     parsed_answer: Any
     finish_reason: str
     refusal: bool = False
-    input_tokens: int = 0
-    cached_tokens: int = 0
-    output_tokens: int = 0
-    reasoning_tokens: int = 0
+    input_tokens: int | None = None
+    cached_tokens: int | None = None
+    output_tokens: int | None = None
+    reasoning_tokens: int | None = None
     tool_calls: tuple[dict[str, Any], ...] = ()
     latency_ms: float = 0
-    provider_cost: float = 0
+    provider_cost: Decimal | None = None
     created_utc: str = field(default_factory=utc_now_iso)
     schema_version: str = SCHEMA_VERSION
+    resolved_model: str | None = None
+    resolved_provider: str | None = None
+    endpoint: str | None = None
+    content: Any = None
+    router_metadata: dict[str, Any] = field(default_factory=dict)
+    usage: dict[str, Any] = field(default_factory=dict)
+    calculated_cost: Decimal | None = None
+    cost_reconciliation: dict[str, Any] = field(default_factory=dict)
 
     def to_json(self) -> dict[str, Any]:
-        return asdict(self)
+        value = asdict(self)
+        for key in ("provider_cost", "calculated_cost"):
+            amount = value[key]
+            value[key] = None if amount is None else format(amount, "f")
+        return value
 
     @classmethod
     def from_json(cls, value: dict[str, Any]) -> "ProviderResponse":
         copy = dict(value)
         copy["tool_calls"] = tuple(copy.get("tool_calls", ()))
+        for key in ("provider_cost", "calculated_cost"):
+            if copy.get(key) is not None:
+                copy[key] = Decimal(str(copy[key]))
         return cls(**copy)
 
 

@@ -46,7 +46,11 @@ EXPORT_SCHEMAS: dict[str, pa.Schema] = {
         ("tool_calls_json", pa.string()), ("provider_cost", pa.float64()),
         ("finish_reason", pa.string()), ("refusal", pa.int8()),
         ("response_id", pa.string()), ("from_cache", pa.int8()),
-        ("created_utc", pa.string()),
+        ("created_utc", pa.string()), ("resolved_model", pa.string()),
+        ("resolved_provider", pa.string()), ("endpoint", pa.string()),
+        ("content_json", pa.string()), ("router_metadata_json", pa.string()),
+        ("usage_json", pa.string()), ("calculated_cost", pa.float64()),
+        ("cost_reconciliation_json", pa.string()),
     ]),
     "scores": pa.schema([
         ("schema_version", pa.string()), ("attempt_id", pa.string()),
@@ -84,6 +88,15 @@ EXPORT_SCHEMAS: dict[str, pa.Schema] = {
     "run_provenance": pa.schema([
         ("schema_version", pa.string()), ("provenance_id", pa.string()),
         ("run_id", pa.string()), ("provenance_json", pa.string()),
+    ]),
+    "transport_events": pa.schema([
+        ("schema_version", pa.string()), ("event_id", pa.string()),
+        ("run_id", pa.string()), ("request_hash", pa.string()),
+        ("provider", pa.string()), ("transport_attempt", pa.int64()),
+        ("event_type", pa.string()), ("status_code", pa.int64()),
+        ("retry_after_seconds", pa.float64()), ("delay_seconds", pa.float64()),
+        ("error_type", pa.string()), ("error_message", pa.string()),
+        ("created_utc", pa.string()),
     ]),
 }
 

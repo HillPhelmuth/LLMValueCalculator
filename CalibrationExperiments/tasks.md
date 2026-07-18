@@ -183,7 +183,7 @@ Added run provenance records containing code commit, manifest and dependency-loc
 
 ## Phase 2: OpenRouter model discovery and inference
 
-### - [ ] T009 - Implement the OpenRouter model-catalog client
+### - [x] T009 - Implement the OpenRouter model-catalog client
 
 **Description**
 
@@ -202,9 +202,9 @@ Build an authenticated async HTTP client separate from inference, follow `offset
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added the authenticated async `OpenRouterCatalogClient` for `GET https://openrouter.ai/api/v1/models` with `offset`/`limit` pagination, explicit HTTP/schema errors, recorded raw pages, normalized catalog entries, Decimal pricing, provider limits, modalities, and supported parameters. Catalogs become timestamped content-addressed immutable snapshots; recorded contract fixtures cover pagination, invalid payloads, and persistence.
 
-### - [ ] T010 - Define current-model eligibility rules
+### - [x] T010 - Define current-model eligibility rules
 
 **Description**
 
@@ -223,9 +223,9 @@ Implement declarative filters over the live catalog, join models to the Artifici
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Implemented declarative freshness, availability, version, context, output, parameter, tool, JSON, and modality filters in `select_model_panel()`. Panels join the frozen Artificial Analysis snapshot, enforce Experiment 1's minimum 12-model/two-per-populated-ten-point-band rule, and persist selected models plus explicit exclusion reasons and hashes in a reviewable panel snapshot.
 
-### - [ ] T011 - Build the Artificial Analysis model mapping and snapshot
+### - [x] T011 - Build the Artificial Analysis model mapping and snapshot
 
 **Description**
 
@@ -244,9 +244,9 @@ Create a versioned mapping file with stable catalog IDs, source citations, manua
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added versioned `ArtificialAnalysisMapping`/`ArtificialAnalysisSnapshot` records and a YAML mapping loader/template with stable catalog IDs, exact model versions, raw intelligence/coding/agentic/cost indices, dates, source citations, and manual-override rationale. Validation rejects duplicate OpenRouter or AA version mappings, missing citations, and catalog-absent IDs; snapshot hashes change on mapping changes.
 
-### - [ ] T012 - Implement deterministic OpenRouter routing locks
+### - [x] T012 - Implement deterministic OpenRouter routing locks
 
 **Description**
 
@@ -265,9 +265,9 @@ Use OpenAI SDK `extra_body` for OpenRouter routing fields, prefer an exact provi
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added routing translation to the OpenRouter `provider` request object, including provider order, exact endpoint selection, fallback policy, parameter requirements, data-collection/ZDR policy, and quantization. Resolved manifests record the complete routing object; fitted requests disable fallbacks by default, and normalized router metadata/fallback resolution is retained in attempts.
 
-### - [ ] T013 - Implement the OpenRouter provider with the OpenAI SDK
+### - [x] T013 - Implement the OpenRouter provider with the OpenAI SDK
 
 **Description**
 
@@ -286,9 +286,9 @@ Implement the existing `ModelProvider` contract, keep streaming disabled for det
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Implemented `OpenRouterProvider` with `AsyncOpenAI(base_url="https://openrouter.ai/api/v1")`, non-streaming chat completions, messages/tools/tool choice/response formats/reasoning/routing, optional attribution headers, exact serialized request capture, and provider-neutral response mapping. The adapter preserves raw SDK JSON and maps content, refusal, tool calls, finish reason, nullable usage, routing, and cost metadata; mocked SDK contract tests cover the path.
 
-### - [ ] T014 - Validate model parameter compatibility before execution
+### - [x] T014 - Validate model parameter compatibility before execution
 
 **Description**
 
@@ -307,9 +307,9 @@ Build a capability validator from the OpenRouter catalog snapshot, account for p
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added catalog-driven compatibility checks for context/output limits, sampling, reasoning, tools, structured output, tool choice, routing-required parameters, and provider maxima. `CalibrationRunner` validates every resolved request cell before queue creation and stores normalized compatibility results plus a compatibility hash in the resolved manifest; errors identify the model and failed capability.
 
-### - [ ] T015 - Normalize OpenRouter response, routing, usage, and cost data
+### - [x] T015 - Normalize OpenRouter response, routing, usage, and cost data
 
 **Description**
 
@@ -328,9 +328,9 @@ Extend `ProviderResponse` and the storage schema, parse OpenRouter-specific fiel
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Extended response and attempt records with resolved model/provider/endpoint, content, router metadata, nullable token fields, cached/reasoning usage, reported/calculated cost, and reconciliation status while preserving raw response artifacts. Added Decimal cost calculation for prompt, completion, cached, reasoning, image, web-search, and request charges, with explicit missing-versus-zero handling and mismatch tests.
 
-### - [ ] T016 - Implement OpenRouter-aware retry and throttling policy
+### - [x] T016 - Implement OpenRouter-aware retry and throttling policy
 
 **Description**
 
@@ -349,9 +349,9 @@ Classify OpenAI SDK exceptions and OpenRouter error payloads, add per-provider t
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added status/header-aware retry classification, Retry-After parsing, bounded exponential backoff with jitter, permanent-error fast failure, provider concurrency/request/token gates, and durable transport-event records. Transport retries are distinct from experimental repeats and are tested with a simulated 429: the retry and success events are recorded while repeat index remains unchanged.
 
-### - [ ] T017 - Add OpenRouter connectivity and budget preflight
+### - [x] T017 - Add OpenRouter connectivity and budget preflight
 
 **Description**
 
@@ -370,7 +370,7 @@ Add a `preflight` CLI command, tokenize or conservatively estimate every rendere
 
 **Implementation Details**
 
-<add implementation details here upon task completion>
+Added the `preflight` CLI command and machine-readable report covering credentials, dataset/catalog checks, request compatibility, optional low-output canary calls, input/output/tool/retry/repeat estimates, Decimal spend, request/token budgets, and approval artifacts for over-budget runs. OpenRouter runs refresh or load the catalog and must pass preflight before queue creation; reports and errors never expose the API key.
 
 ## Phase 3: Dataset, prompt, perturbation, and scoring platform
 

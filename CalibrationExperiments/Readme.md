@@ -549,4 +549,20 @@ uv run --locked pip-audit
 uv run --locked pip-licenses --format=markdown --with-urls --with-authors
 ```
 
-The next implementation slice should add the first real provider adapter and the initial exact-score benchmark adapter for experiment 1.
+Phase 2 adds the OpenRouter model and inference layer:
+
+- `OpenRouterCatalogClient` fetches the authenticated paginated `/api/v1/models` catalog, preserves raw pages, normalizes Decimal pricing and provider limits, and writes timestamped immutable snapshots.
+- `ArtificialAnalysisSnapshot` and `select_model_panel()` enforce one-to-one dated model mappings, preserve source citations and index fields, balance Experiment 1 intelligence bands, and persist selection/exclusion reasons.
+- `OpenRouterProvider` uses `AsyncOpenAI(base_url="https://openrouter.ai/api/v1")`, supports tools, tool choice, response formats, reasoning, routing, optional attribution headers, and normalized nullable usage/cost/routing metadata.
+- Compatibility checks run against the frozen catalog before queue creation. Routing locks are translated to OpenRouter's `provider` object with fitted-run fallbacks disabled.
+- Retry classification honors retryable status codes and `Retry-After`, records transport events separately from experimental repeats, and enforces request/token budgets.
+- `preflight` produces a machine-readable credential, catalog, capability, canary, and spend report and requires an approval artifact when the resolved estimate exceeds budget.
+
+Example preflight command:
+
+```bash
+uv run --locked python -m calibration preflight manifests/smoke.yaml \
+  --catalog path/to/catalog-snapshot.json --output preflight.json
+```
+
+The next implementation slice should add the dataset, prompt, perturbation, and scoring platform for the experiment-specific benchmarks.

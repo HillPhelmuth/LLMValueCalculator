@@ -1,0 +1,16 @@
+{
+  "data": [
+    {
+      "id": "provider/model-2026-01",
+      "canonical_slug": "provider/model-2026-01",
+      "created": 1767225600,
+      "expiration_date": "2027-01-01",
+      "context_length": 8192,
+      "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]},
+      "supported_parameters": ["temperature", "tools", "tool_choice", "structured_outputs", "reasoning"],
+      "pricing": {"prompt": "0.00000125", "completion": "0.00000500", "request": "0.00000010"},
+      "top_provider": {"context_length": 8192, "max_completion_tokens": 4096, "is_moderated": false},
+      "versioned": true
+    }
+  ]
+}

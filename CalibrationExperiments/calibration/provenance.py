@@ -23,6 +23,7 @@ class RunProvenance:
     model_snapshot_hash: str
     scorer_versions: dict[str, str]
     container_digests: tuple[str, ...]
+    catalog_snapshot_hash: str | None = None
     environment: dict[str, Any] = field(default_factory=dict)
     schema_version: str = SCHEMA_VERSION
 
@@ -51,6 +52,7 @@ def build_run_provenance(
     *,
     dependency_lock: str | Path | None = None,
     environment: dict[str, Any] | None = None,
+    catalog_snapshot_hash: str | None = None,
 ) -> RunProvenance:
     lock_hash = "unavailable"
     if dependency_lock and Path(dependency_lock).is_file():
@@ -76,6 +78,7 @@ def build_run_provenance(
         "model_snapshot_hash": model_snapshot_hash,
         "scorer_versions": scorer_versions,
         "container_digests": tuple(manifest.containers.digests),
+        "catalog_snapshot_hash": catalog_snapshot_hash,
     }
     provenance_id = canonical_hash(record)
     provenance = RunProvenance(
