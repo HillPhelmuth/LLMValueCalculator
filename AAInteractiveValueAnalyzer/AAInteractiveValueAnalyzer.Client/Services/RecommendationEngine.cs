@@ -476,7 +476,7 @@ public class RecommendationEngine
 
         // Use the category-specific AA index when it is available. Coding and agentic indices are
         // published on the same scale as the composite Intelligence Index.
-        var rawCapabilityScore = AdjustedIntelligence(model.CapabilityIndexFor(inputs.TaskCategory));
+        var rawCapabilityScore = model.CapabilityIndexFor(inputs.TaskCategory);
         var capabilityIndexName = model.CapabilityIndexNameFor(inputs.TaskCategory);
         var adjustedIntelligence = AdjustedIntelligence(rawCapabilityScore);
 
