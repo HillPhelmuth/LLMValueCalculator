@@ -1,4 +1,6 @@
 <Solution>
   <Project Path="AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/AAInteractiveValueAnalyzer.Client.csproj" />
+  <Project Path="AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.ScenarioRunner/AAInteractiveValueAnalyzer.ScenarioRunner.csproj" />
+  <Project Path="AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Tests/AAInteractiveValueAnalyzer.Tests.csproj" />
   <Project Path="AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.csproj" />
 </Solution>

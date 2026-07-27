@@ -42,6 +42,8 @@ public sealed class AnalysisSummary
 {
     public string CalibrationProfileVersion { get; init; } = string.Empty;
     public string CalibrationProfileHash { get; init; } = string.Empty;
+    public bool UsedCalibrationFallback { get; init; }
+    public string? CalibrationWarning { get; init; }
     public double EffectiveDifficulty { get; init; }
     public double Tau { get; init; }
     public IReadOnlyList<string> DifficultyFactors { get; init; } = [];

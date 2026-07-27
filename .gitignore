@@ -470,3 +470,4 @@ FodyWeavers.xsd
 /CalibrationExperiments/.full-runs/
 /CalibrationExperiments/.ci-coverage.xml
 /CalibrationExperiments/*.egg-info/
+/CalibrationExperiments/.calibration-runs

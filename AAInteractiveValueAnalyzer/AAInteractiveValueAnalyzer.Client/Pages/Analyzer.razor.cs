@@ -32,18 +32,11 @@ public partial class Analyzer
     private bool IsAnalyzing { get; set; }
     private string? AnalysisError { get; set; }
     private bool _analysisPending;
-    private ModelCatalog? _modelCatalog;
-    private RecommendationEngine? _recommendationEngine;
 
     [Inject]
     private IJSRuntime JsRuntime { get; set; } = null!;
     [Inject]
-    private HttpClient Client { get; set; } = null!;
-
-    private ModelCatalog ModelCatalog => _modelCatalog ??= new ModelCatalog(Client);
-
-    private RecommendationEngine RecommendationEngine =>
-        _recommendationEngine ??= new RecommendationEngine(ModelCatalog);
+    private RecommendationEngine RecommendationEngine { get; set; } = null!;
 
     private AnalysisSummary Summary { get; set; } = new();
 

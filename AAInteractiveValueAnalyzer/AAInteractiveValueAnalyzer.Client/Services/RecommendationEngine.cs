@@ -17,16 +17,23 @@ namespace AAInteractiveValueAnalyzer.Client.Services;
 public class RecommendationEngine
 {
     private readonly ModelCatalog modelCatalog;
-    private readonly CalibrationProfile calibrationProfile;
+    private readonly CalibrationProfileProvider? profileProvider;
+    private readonly CalibrationProfile? fixedProfile;
 
-    public RecommendationEngine(ModelCatalog modelCatalog, CalibrationProfile? profile = null)
+    public RecommendationEngine(ModelCatalog modelCatalog, CalibrationProfileProvider profileProvider)
     {
         this.modelCatalog = modelCatalog;
-        calibrationProfile = profile ?? CalibrationProfile.Baseline;
-        calibrationProfile.Validate();
+        this.profileProvider = profileProvider;
     }
 
-    public CalibrationProfile ActiveProfile => calibrationProfile;
+    public RecommendationEngine(ModelCatalog modelCatalog, CalibrationProfile profile)
+    {
+        this.modelCatalog = modelCatalog;
+        fixedProfile = profile;
+        fixedProfile.Validate();
+    }
+
+    public CalibrationProfile ActiveProfile => fixedProfile ?? CalibrationProfile.Baseline;
     /// <summary>
     /// The analysis is normalized around task batches of this size when estimating cost, value, and throughput.
     /// </summary>
@@ -384,6 +391,7 @@ public class RecommendationEngine
     /// <returns>A summary containing difficulty factors, guardrails, and ranked model recommendations.</returns>
     public async Task<AnalysisSummary> Analyze(UseCaseInputs inputs)
     {
+        var calibrationProfile = fixedProfile ?? await profileProvider!.GetActiveAsync();
         var difficultyFactors = new List<string>();
         var guardrailFactors = new List<string>();
         var categoryProfile = ResolveTaskCategoryProfile(inputs.TaskCategory);
@@ -428,7 +436,7 @@ public class RecommendationEngine
         difficulty = Math.Clamp(difficulty, 0, 100);
         var tauKey = inputs.DifficultySensitivity.ToString().ToLowerInvariant();
         var tau = calibrationProfile.Tau.GetValueOrDefault(tauKey, TauBySensitivity.GetValueOrDefault(inputs.DifficultySensitivity, 5));
-        var effectiveTau = EffectiveTau(tau, difficulty);
+        var effectiveTau = EffectiveTau(tau, difficulty, calibrationProfile);
         var attempts = inputs.RetriesAllowed ? Math.Clamp(inputs.MaxAttempts, 1, 5) : 1;
         var targetSuccess = Math.Clamp(inputs.RequiredSuccessRate / 100d, 0, 1);
         var allowedCriticalFailure = Math.Clamp(inputs.AllowedCriticalFailureRate / 100d, 0, 1);
@@ -447,6 +455,8 @@ public class RecommendationEngine
         {
             CalibrationProfileVersion = calibrationProfile.ProfileVersion,
             CalibrationProfileHash = calibrationProfile.ProfileHash,
+            UsedCalibrationFallback = profileProvider?.UsedFallback ?? false,
+            CalibrationWarning = profileProvider?.Warning,
             EffectiveDifficulty = difficulty,
             Tau = effectiveTau,
             DifficultyFactors = difficultyFactors,
@@ -478,7 +488,7 @@ public class RecommendationEngine
         // published on the same scale as the composite Intelligence Index.
         var rawCapabilityScore = model.CapabilityIndexFor(inputs.TaskCategory);
         var capabilityIndexName = model.CapabilityIndexNameFor(inputs.TaskCategory);
-        var adjustedIntelligence = AdjustedIntelligence(rawCapabilityScore);
+        var adjustedIntelligence = profile.AdjustedIntelligence(rawCapabilityScore);
 
         // CHANGED: success is now the product of two independent hurdles. The sigmoid models the
         // capability hurdle (can the model do the task at all); BaseErrorFloorRate models the
@@ -694,9 +704,9 @@ public class RecommendationEngine
     /// range. Without this, the 3x top-end slope makes every curve three times sharper for frontier
     /// models than for weak ones, and the Soft/Normal/Sharp settings stop being comparable.
     /// </summary>
-    private static double EffectiveTau(double configuredTau, double difficulty)
+    private static double EffectiveTau(double configuredTau, double difficulty, CalibrationProfile profile)
     {
-        var slope = LocalCurveSlope(difficulty);
+        var slope = LocalCurveSlope(difficulty, profile);
         return configuredTau * Math.Max(slope, 0.0001);
     }
 
@@ -705,14 +715,15 @@ public class RecommendationEngine
     /// adjusted) difficulty axis. Difficulty lives on the adjusted scale, so we find the segment
     /// whose adjusted span contains it and return that segment's slope.
     /// </summary>
-    private static double LocalCurveSlope(double adjustedPoint)
+    private static double LocalCurveSlope(double adjustedPoint, CalibrationProfile profile)
     {
         var adjustedLower = 0d;
         var rawLower = 0d;
 
-        foreach (var segment in IntelligenceCurve.Segments)
+        foreach (var segment in profile.CurveSegments)
         {
-            var rawSpan = segment.UpperBoundInclusive - rawLower;
+            var upper = segment.Upper ?? double.PositiveInfinity;
+            var rawSpan = upper - rawLower;
             var adjustedUpper = double.IsPositiveInfinity(rawSpan) ? double.PositiveInfinity : adjustedLower + rawSpan * segment.Slope;
 
             if (adjustedPoint <= adjustedUpper || double.IsPositiveInfinity(adjustedUpper))
@@ -721,10 +732,10 @@ public class RecommendationEngine
             }
 
             adjustedLower = adjustedUpper;
-            rawLower = segment.UpperBoundInclusive;
+            rawLower = upper;
         }
 
-        return IntelligenceCurve.Segments[^1].Slope;
+        return profile.CurveSegments[^1].Slope;
     }
 
     /// <summary>
