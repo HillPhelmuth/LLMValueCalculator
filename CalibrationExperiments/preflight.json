@@ -1,0 +1,46 @@
+{
+  "approval_required": false,
+  "canary": {
+    "passed": true,
+    "requested": false
+  },
+  "catalog_snapshot_hash": "9debba52d50c3e6ebb6683c7a03f1e8ee846ddcff4c57f152097b74228d2c73c",
+  "checks": [
+    {
+      "message": "API key is configured",
+      "name": "credentials",
+      "passed": true
+    },
+    {
+      "message": "validated 6 cases",
+      "name": "dataset",
+      "passed": true
+    },
+    {
+      "message": "validated 6 request cells",
+      "name": "catalog_compatibility",
+      "passed": true
+    },
+    {
+      "message": "estimated spend is within budget",
+      "name": "budget",
+      "passed": true
+    },
+    {
+      "message": "estimated requests are within budget",
+      "name": "request_budget",
+      "passed": true
+    },
+    {
+      "message": "estimated tokens are within budget",
+      "name": "token_budget",
+      "passed": true
+    }
+  ],
+  "estimated_cost": "0.058455726",
+  "estimated_requests": 18,
+  "estimated_tokens": 301575,
+  "manifest_hash": "8e5c7561f49e05de07bd9b7fe6287060a883dd0e48e508a7d82b20abb86dbdf6",
+  "schema_version": "1.0",
+  "status": "pass"
+}

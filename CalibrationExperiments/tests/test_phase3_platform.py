@@ -83,7 +83,13 @@ class Phase3PlatformTests(unittest.TestCase):
             root = Path(directory)
             path = root / "cases.jsonl"
             rows = [
-                {"case_id": str(index), "prompt": f"prompt {index}", "expected": index, "split": "validation", "metadata": {"category": "a" if index % 2 else "b"}}
+                {
+                    "case_id": str(index),
+                    "prompt": f"prompt {index}",
+                    "expected": index,
+                    "split": "validation",
+                    "metadata": {"category": "a" if index % 2 else "b"},
+                }
                 for index in range(1, 9)
             ]
             path.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
@@ -146,28 +152,47 @@ class Phase3PlatformTests(unittest.TestCase):
         response = ProviderResponse("r", {}, {"answer": "yes", "score": 1.0}, "stop")
         case = CanonicalCase("case", {}, {"answer": "yes", "score": 1.0})
         self.assertTrue(FieldLevelComparisonScorer().score(case, response).success)
-        self.assertEqual(1.0, RetrievalRecallScorer().score(
-            CanonicalCase("r", {}, ["a", "b"]),
-            ProviderResponse("r", {}, ["a", "b", "c"], "stop"),
-        ).semantic_score)
-        self.assertEqual(1.0, NdcgScorer().score(
-            CanonicalCase("n", {}, {"a": 2, "b": 1}),
-            ProviderResponse("r", {}, ["a", "b"], "stop"),
-        ).semantic_score)
-        valid = SchemaValidityScorer({"type": "object", "required": ["answer"]}).score(case, response)
+        self.assertEqual(
+            1.0,
+            RetrievalRecallScorer()
+            .score(
+                CanonicalCase("r", {}, ["a", "b"]),
+                ProviderResponse("r", {}, ["a", "b", "c"], "stop"),
+            )
+            .semantic_score,
+        )
+        self.assertEqual(
+            1.0,
+            NdcgScorer()
+            .score(
+                CanonicalCase("n", {}, {"a": 2, "b": 1}),
+                ProviderResponse("r", {}, ["a", "b"], "stop"),
+            )
+            .semantic_score,
+        )
+        valid = SchemaValidityScorer({"type": "object", "required": ["answer"]}).score(
+            case, response
+        )
         self.assertTrue(valid.schema_valid)
         registry = ScorerRegistry()
-        self.assertEqual(9, len(registry.locks(tuple(registry._scorers))))
+        self.assertEqual(10, len(registry.locks(tuple(registry._scorers))))
         report = ExecutionReport(
             outcome=ExecutionOutcome.PARTIAL,
-            tests=(TestCaseResult("critical", False, True), TestCaseResult("other", True)),
+            tests=(
+                TestCaseResult("critical", False, True),
+                TestCaseResult("other", True),
+            ),
         )
         self.assertEqual("partial", report.to_json()["outcome"])
         tool_case = CanonicalCase(
             "tool",
             {},
             None,
-            {"expected_tool_calls": (), "expected_tool_state": {}, "observed_tool_state": {}},
+            {
+                "expected_tool_calls": (),
+                "expected_tool_state": {},
+                "observed_tool_state": {},
+            },
         )
         self.assertTrue(ToolStateScorer().score(tool_case, response).success)
 
@@ -198,7 +223,9 @@ class Phase3PlatformTests(unittest.TestCase):
             subgroups=["a", "a", "b", "b"],
         )
         self.assertTrue(report.passed)
-        self.assertLessEqual(judge_uncertainty_interval(0.5, sensitivity=1, specificity=1)[0], 0.5)
+        self.assertLessEqual(
+            judge_uncertainty_interval(0.5, sensitivity=1, specificity=1)[0], 0.5
+        )
         assert_intelligence_curve_safe(("answer_exact_match",))
 
 

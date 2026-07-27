@@ -26,7 +26,10 @@ class PipelineBudget:
     timeout_minutes: int
 
     def validate(self) -> None:
-        if min(self.max_requests, self.max_tokens, self.timeout_minutes) < 1 or self.max_usd < 0:
+        if (
+            min(self.max_requests, self.max_tokens, self.timeout_minutes) < 1
+            or self.max_usd < 0
+        ):
             raise PipelineError("Pipeline budgets must be positive and bounded")
 
 
@@ -44,15 +47,29 @@ class PipelineSpec:
     def validate(self) -> None:
         self.budget.validate()
         if not self.name or not self.manifests or self.max_cases < 1:
-            raise PipelineError("Pipeline specs require a name, manifest, and positive case limit")
+            raise PipelineError(
+                "Pipeline specs require a name, manifest, and positive case limit"
+            )
         if self.mode is PipelineMode.PULL_REQUEST and self.writes_profile:
-            raise PipelineError("Pull-request pipelines cannot write calibration profiles")
+            raise PipelineError(
+                "Pull-request pipelines cannot write calibration profiles"
+            )
         if self.mode is PipelineMode.NIGHTLY and self.writes_profile:
             raise PipelineError("Nightly pipelines cannot publish calibration profiles")
-        if self.mode is PipelineMode.FULL and (not self.requires_approval or not self.writes_profile):
-            raise PipelineError("Full pipelines require approval and candidate-profile output")
-        if self.allow_provider_calls and self.mode is PipelineMode.PULL_REQUEST and not self.requires_approval:
-            raise PipelineError("Provider calls on pull requests require a protected approval gate")
+        if self.mode is PipelineMode.FULL and (
+            not self.requires_approval or not self.writes_profile
+        ):
+            raise PipelineError(
+                "Full pipelines require approval and candidate-profile output"
+            )
+        if (
+            self.allow_provider_calls
+            and self.mode is PipelineMode.PULL_REQUEST
+            and not self.requires_approval
+        ):
+            raise PipelineError(
+                "Provider calls on pull requests require a protected approval gate"
+            )
 
     def to_json(self) -> dict[str, Any]:
         self.validate()
@@ -89,15 +106,17 @@ def classify_nightly_drift(
 ) -> NightlyDriftReport:
     baseline = baseline or {}
     drift = {
-        key: current[key] - baseline[key]
-        for key in current.keys() & baseline.keys()
+        key: current[key] - baseline[key] for key in current.keys() & baseline.keys()
     }
     alerts: list[str] = []
     if any(abs(value) >= score_threshold for value in drift.values()):
         alerts.append("model_behavior_drift")
     if failures.get("provider", 0) or failures.get("infrastructure", 0):
         alerts.append("infrastructure_drift")
-    if baseline.get("latency", 0) and latency.get("latency", 0) / baseline["latency"] - 1 >= latency_threshold:
+    if (
+        baseline.get("latency", 0)
+        and latency.get("latency", 0) / baseline["latency"] - 1 >= latency_threshold
+    ):
         alerts.append("latency_drift")
     return NightlyDriftReport(
         run_id=run_id,
@@ -124,10 +143,22 @@ class FullRunApproval:
 
     def validate(self) -> None:
         self.budget.validate()
-        if not all((self.approved_by, self.approved_utc, self.manifest_set_hash, self.model_snapshot_hash, self.code_commit)):
-            raise PipelineError("Full-run approval requires reviewer, hashes, and code commit")
+        if not all(
+            (
+                self.approved_by,
+                self.approved_utc,
+                self.manifest_set_hash,
+                self.model_snapshot_hash,
+                self.code_commit,
+            )
+        ):
+            raise PipelineError(
+                "Full-run approval requires reviewer, hashes, and code commit"
+            )
         if not self.candidate_only:
-            raise PipelineError("Full pipeline cannot approve automatic production promotion")
+            raise PipelineError(
+                "Full pipeline cannot approve automatic production promotion"
+            )
 
     def to_json(self) -> dict[str, Any]:
         self.validate()
@@ -171,12 +202,16 @@ def write_nightly_report(
         attempts = store.rows_for_export("attempts", run_id)
         scores = store.rows_for_export("scores", run_id)
         transport = store.rows_for_export("transport_events", run_id)
-    successes = [float(row["success"]) for row in scores if row.get("success") is not None]
+    successes = [
+        float(row["success"]) for row in scores if row.get("success") is not None
+    ]
     current = {
         "success_rate": sum(successes) / len(successes) if successes else 0.0,
     }
     latency_values = [float(row["latency_ms"]) for row in attempts]
-    latency = {"latency": sum(latency_values) / len(latency_values) if latency_values else 0.0}
+    latency = {
+        "latency": sum(latency_values) / len(latency_values) if latency_values else 0.0
+    }
     raw_spend = summary.get("provider_cost")
     spend = {"usd": 0.0 if raw_spend is None else float(str(raw_spend))}
     failures = {
@@ -218,7 +253,9 @@ def write_nightly_report(
     )
     destination = Path(output)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(json.dumps(report.to_json(), sort_keys=True, indent=2), encoding="utf-8")
+    destination.write_text(
+        json.dumps(report.to_json(), sort_keys=True, indent=2), encoding="utf-8"
+    )
     return destination
 
 
@@ -237,10 +274,17 @@ def validate_fitting_gate(
     from calibration.storage.sqlite import SqliteRunStore
 
     manifest = load_manifest(manifest_path)
-    dataset = JsonlDatasetAdapter(manifest.dataset, manifest_directory=Path(manifest_path).resolve().parent)
+    dataset = JsonlDatasetAdapter(
+        manifest.dataset, manifest_directory=Path(manifest_path).resolve().parent
+    )
     dataset.prepare()
     cases = tuple(dataset.cases(manifest.dataset.split))
-    expected = min(max_cases, len(cases)) * len(manifest.models) * len(manifest.conditions) * manifest.generation.repeats
+    expected = (
+        min(max_cases, len(cases))
+        * len(manifest.models)
+        * len(manifest.conditions)
+        * manifest.generation.repeats
+    )
     with SqliteRunStore(database) as store:
         run_id = store.latest_run_id()
         summary = store.run_summary(run_id)
@@ -261,8 +305,15 @@ def validate_fitting_gate(
         "artifact_errors": artifact_errors,
     }
     if summary["status"] != "completed":
-        raise PipelineError(f"Fitting requires a completed run, got {summary['status']}")
-    if provenance_errors or artifact_errors or not scores or missing_fraction > max_missing_fraction:
+        raise PipelineError(
+            f"Fitting requires a completed run, got {summary['status']}"
+        )
+    if (
+        provenance_errors
+        or artifact_errors
+        or not scores
+        or missing_fraction > max_missing_fraction
+    ):
         raise PipelineError(f"Fitting integrity/coverage gate failed: {gate}")
     return gate
 
@@ -298,15 +349,22 @@ def write_candidate_profile(
                     case_id=str(value.get("case_id", "unknown")),
                     prompt_id=str(value.get("prompt_id", "unknown")),
                     category=value.get("category"),
+                    difficulty=None
+                    if value.get("difficulty") is None
+                    else float(value["difficulty"]),
+                    tau_key=str(value.get("tau_key", "normal")),
                 )
             )
     fit = fit_statistical_model(
         StatisticalModel.BERNOULLI,
         rows,
         bootstrap_replicates=bootstrap_replicates,
+        error_floor=0.01,
     )
     if not fit.diagnostics.promotable:
-        raise PipelineError(f"Candidate fit failed promotion-readiness diagnostics: {fit.diagnostics.to_json()}")
+        raise PipelineError(
+            f"Candidate fit failed promotion-readiness diagnostics: {fit.diagnostics.to_json()}"
+        )
     curve = fit.estimates["curve"]
     projected_slopes: list[float] = []
     for index, slope in enumerate(curve["slopes"]):
@@ -322,23 +380,40 @@ def write_candidate_profile(
     profile = CalibrationProfile(
         profile_version=profile_version,
         curve_segments=curve_segments,
-        tau={"soft": curve["tau_ratios"]["normal"], "normal": curve["tau_ratios"]["normal"], "sharp": curve["tau_ratios"]["reasoning"]},
-        error_floor=float(curve["error_floor"]),
+        tau={
+            "soft": curve["tau_ratios"]["normal"],
+            "normal": curve["tau_ratios"]["domain"],
+            "sharp": curve["tau_ratios"]["reasoning"],
+        },
+        error_floor=0.01,
         adjustments={},
+        # Experiment 1 changes only the capability curve and tau.  Empty maps
+        # mean the compiled adjustment and risk priors remain authoritative.
         risk_multipliers={},
-        uncertainty={"fit": fit.to_json(), "candidate_only": True},
+        uncertainty={
+            "fit": fit.to_json(),
+            "candidate_only": True,
+            "error_floor_status": "provisional-not-promoted",
+        },
         manifest_hashes=manifest_hashes,
         fitting_data_hash=hashlib.sha256(source.read_bytes()).hexdigest(),
         aa_snapshot=aa_snapshot,
     )
     destination = Path(output)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(json.dumps(profile.to_json(), sort_keys=True, indent=2), encoding="utf-8")
+    destination.write_text(
+        json.dumps(profile.to_json(), sort_keys=True, indent=2), encoding="utf-8"
+    )
     return destination
 
-def write_pipeline_report(report: NightlyDriftReport | PipelineSpec, path: str | Path) -> Path:
+
+def write_pipeline_report(
+    report: NightlyDriftReport | PipelineSpec, path: str | Path
+) -> Path:
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     value = report.to_json()
-    destination.write_text(json.dumps(value, sort_keys=True, indent=2), encoding="utf-8")
+    destination.write_text(
+        json.dumps(value, sort_keys=True, indent=2), encoding="utf-8"
+    )
     return destination

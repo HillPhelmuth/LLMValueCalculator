@@ -19,12 +19,22 @@ from calibration.model_mapping import (
     ArtificialAnalysisSnapshot,
     MappingError,
 )
-from calibration.model_panel import EligibilityError, ModelEligibilityRules, select_model_panel
+from calibration.model_panel import (
+    EligibilityError,
+    ModelEligibilityRules,
+    select_model_panel,
+)
 from calibration.models import Message, ProviderRequest
-from calibration.providers.compatibility import CompatibilityError, validate_request_compatibility
+from calibration.providers.compatibility import (
+    CompatibilityError,
+    validate_request_compatibility,
+)
 from calibration.providers.base import ModelProvider
 from calibration.providers.cost import calculate_catalog_cost
-from calibration.providers.openrouter import OpenRouterProvider, build_openrouter_request
+from calibration.providers.openrouter import (
+    OpenRouterProvider,
+    build_openrouter_request,
+)
 from calibration.providers.openrouter_catalog import (
     CatalogSchemaError,
     CatalogSnapshot,
@@ -84,13 +94,17 @@ class Phase2ProviderTests(unittest.TestCase):
             client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
             try:
                 with self.assertRaises(CatalogSchemaError):
-                    await OpenRouterCatalogClient("key", http_client=client).fetch_page()
+                    await OpenRouterCatalogClient(
+                        "key", http_client=client
+                    ).fetch_page()
             finally:
                 await client.aclose()
 
         asyncio.run(run_invalid())
 
-    def test_model_panel_requires_mapping_and_balanced_experiment_one_bands(self) -> None:
+    def test_model_panel_requires_mapping_and_balanced_experiment_one_bands(
+        self,
+    ) -> None:
         raw_models = []
         mappings = []
         for band in range(10, 70, 10):
@@ -102,7 +116,13 @@ class Phase2ProviderTests(unittest.TestCase):
                         "canonical_slug": model_id,
                         "context_length": 8192,
                         "supported_parameters": ["temperature"],
-                        "pricing": {"prompt": "0.000001", "completion": "0.000002"},
+                        "pricing": {
+                            "prompt": "0.000001",
+                            "completion": "0.000002",
+                            "overrides": [
+                                {"min_prompt_tokens": 272000, "prompt": "0.000002"}
+                            ],
+                        },
                         "top_provider": {"max_completion_tokens": 4096},
                         "versioned": True,
                     }
@@ -134,13 +154,13 @@ class Phase2ProviderTests(unittest.TestCase):
             ModelEligibilityRules(
                 experiment_id="experiment-1",
                 as_of_date="2026-07-18",
-                minimum_models=12,
+                minimum_models=10,
                 required_context_length=4096,
                 required_output_tokens=1024,
                 required_parameters=("temperature",),
             ),
         )
-        self.assertEqual(12, len(panel.selected))
+        self.assertEqual(10, len(panel.selected))
         self.assertTrue(all(item["selection_reason"] for item in panel.selected))
         self.assertEqual(64, len(panel.panel_hash))
         changed_snapshot = ArtificialAnalysisSnapshot.from_mappings(
@@ -157,11 +177,17 @@ class Phase2ProviderTests(unittest.TestCase):
                 source_citations=("source",),
             )
 
-        one_band_catalog = CatalogSnapshot.from_pages(({"data": raw_models[:-1]},))
+        one_band_catalog = CatalogSnapshot.from_pages(({"data": raw_models[:-3]},))
         with self.assertRaises(EligibilityError):
-            select_model_panel(one_band_catalog, aa_snapshot, ModelEligibilityRules(
-                experiment_id="experiment-1", as_of_date="2026-07-18", minimum_models=1
-            ))
+            select_model_panel(
+                one_band_catalog,
+                aa_snapshot,
+                ModelEligibilityRules(
+                    experiment_id="experiment-1",
+                    as_of_date="2026-07-18",
+                    minimum_models=1,
+                ),
+            )
 
     def test_routing_and_openrouter_request_contract(self) -> None:
         routing = build_provider_policy(
@@ -204,7 +230,16 @@ class Phase2ProviderTests(unittest.TestCase):
                     "id": "resp-1",
                     "model": "provider/model-2026",
                     "provider": "Provider A",
-                    "choices": [{"finish_reason": "stop", "message": {"content": "answer", "refusal": None}}],
+                    "choices": [
+                        {
+                            "finish_reason": "stop",
+                            "message": {
+                                "content": "answer",
+                                "refusal": None,
+                                "tool_calls": None,
+                            },
+                        }
+                    ],
                     "usage": {
                         "prompt_tokens": 5,
                         "completion_tokens": 2,
@@ -215,10 +250,21 @@ class Phase2ProviderTests(unittest.TestCase):
                     "router_metadata": {"endpoint": "Provider A"},
                 }
 
-        provider = OpenRouterProvider(client=SimpleNamespace(chat=SimpleNamespace(completions=Completions())))
+        provider = OpenRouterProvider(
+            client=SimpleNamespace(chat=SimpleNamespace(completions=Completions()))
+        )
         request = ProviderRequest(
-            "case-1", "model-1", "model-1", "openrouter", (Message("user", "hi"),),
-            0, 16, None, "baseline", "p1", 0,
+            "case-1",
+            "model-1",
+            "model-1",
+            "openrouter",
+            (Message("user", "hi"),),
+            0,
+            16,
+            None,
+            "baseline",
+            "p1",
+            0,
         )
         response = asyncio.run(provider.complete(request))
         self.assertEqual("answer", response.parsed_answer)
@@ -229,19 +275,42 @@ class Phase2ProviderTests(unittest.TestCase):
         self.assertEqual(False, captured["stream"])
 
     def test_compatibility_and_retry_classification(self) -> None:
-        entry = CatalogSnapshot.from_pages((json.loads((FIXTURES / "models-page-0.json").read_text()),)).models[0]
+        entry = CatalogSnapshot.from_pages(
+            (json.loads((FIXTURES / "models-page-0.json").read_text()),)
+        ).models[0]
         request = ProviderRequest(
-            "case-1", entry.id, entry.id, "openrouter", (Message("user", "hello"),),
-            0, 9000, None, "baseline", "p1", 0,
+            "case-1",
+            entry.id,
+            entry.id,
+            "openrouter",
+            (Message("user", "hello"),),
+            0,
+            9000,
+            None,
+            "baseline",
+            "p1",
+            0,
         )
         result = validate_request_compatibility(request, entry)
         self.assertFalse(result.compatible)
         self.assertIn("provider maximum", " ".join(result.errors))
         with self.assertRaises(CompatibilityError):
-            from calibration.providers.compatibility import validate_requests_against_catalog
-            validate_requests_against_catalog((request,), CatalogSnapshot.from_pages((json.loads((FIXTURES / "models-page-0.json").read_text()),)))
-        self.assertEqual(0.8, BackoffPolicy(jitter_fraction=0).delay(0, retry_after_seconds=0.8))
-        error = SimpleNamespace(status_code=429, response=SimpleNamespace(headers={"Retry-After": "2"}))
+            from calibration.providers.compatibility import (
+                validate_requests_against_catalog,
+            )
+
+            validate_requests_against_catalog(
+                (request,),
+                CatalogSnapshot.from_pages(
+                    (json.loads((FIXTURES / "models-page-0.json").read_text()),)
+                ),
+            )
+        self.assertEqual(
+            0.8, BackoffPolicy(jitter_fraction=0).delay(0, retry_after_seconds=0.8)
+        )
+        error = SimpleNamespace(
+            status_code=429, response=SimpleNamespace(headers={"Retry-After": "2"})
+        )
         classification = classify_exception(error)
         self.assertTrue(classification.retryable)
         self.assertEqual(2.0, classification.retry_after_seconds)
@@ -265,9 +334,7 @@ class Phase2ProviderTests(unittest.TestCase):
                 "request_count": 1,
             },
         )
-        self.assertEqual(
-            Decimal("0.030026"), total
-        )
+        self.assertEqual(Decimal("0.030026"), total)
         self.assertEqual(Decimal("0.000004"), breakdown.request)
 
     def test_preflight_reports_machine_readable_cost_and_canary(self) -> None:
@@ -279,6 +346,7 @@ class Phase2ProviderTests(unittest.TestCase):
                 encoding="utf-8",
             )
             import hashlib
+
             revision = hashlib.sha256(dataset_path.read_bytes()).hexdigest()
             manifest_path = root / "manifest.yaml"
             manifest_path.write_text(
@@ -315,7 +383,9 @@ scorers: [answer_exact_match]
             self.assertGreater(report.estimated_cost, Decimal("0"))
             self.assertEqual("pass", report.to_json()["status"])
 
-    def test_runner_retries_transport_without_changing_experimental_attempt(self) -> None:
+    def test_runner_retries_transport_without_changing_experimental_attempt(
+        self,
+    ) -> None:
         class RateLimitError(Exception):
             status_code = 429
 
@@ -350,6 +420,7 @@ scorers: [answer_exact_match]
                 encoding="utf-8",
             )
             import hashlib
+
             revision = hashlib.sha256(dataset_path.read_bytes()).hexdigest()
             manifest_path = root / "manifest.yaml"
             manifest_path.write_text(

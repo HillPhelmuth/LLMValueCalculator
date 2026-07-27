@@ -19,6 +19,7 @@ from calibration.scorers.deterministic import (
     SupportingFactRecallScorer,
     TokenF1Scorer,
 )
+from calibration.scorers.judge import LlmSemanticCorrectnessScorer
 
 
 class ScorerRegistryError(ValueError):
@@ -63,6 +64,7 @@ class ScorerRegistry:
                 NdcgScorer(),
                 SchemaValidityScorer({"type": "object"}),
                 SemanticStructuredValueScorer(),
+                LlmSemanticCorrectnessScorer(),
             )
         }
 

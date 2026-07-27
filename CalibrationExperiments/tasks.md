@@ -213,7 +213,7 @@ Select an up-to-date, reproducible model panel appropriate for each experiment.
 **Acceptance Criteria**
 
 - Rules exclude expired, unavailable, incompatible, and unversioned rolling models unless their resolved version is captured.
-- Experiment 1 includes at least 12 models across the populated Artificial Analysis intelligence bands, with at least two models per populated ten-point band.
+- Experiment 1 includes exactly 10 models, with two models in each populated 10–19, 20–29, 30–39, 40–49, and 50–59 Artificial Analysis intelligence band.
 - Required context, output, tool, JSON, and modality capabilities are enforced per experiment.
 - Selection reasons and exclusions are stored in the model snapshot.
 
@@ -223,7 +223,7 @@ Implement declarative filters over the live catalog, join models to the Artifici
 
 **Implementation Details**
 
-Implemented declarative freshness, availability, version, context, output, parameter, tool, JSON, and modality filters in `select_model_panel()`. Panels join the frozen Artificial Analysis snapshot, enforce Experiment 1's minimum 12-model/two-per-populated-ten-point-band rule, and persist selected models plus explicit exclusion reasons and hashes in a reviewable panel snapshot.
+Implemented declarative freshness, availability, version, context, output, parameter, tool, JSON, and modality filters in `select_model_panel()`. Experiment 1 now requires exactly 10 models: two in each AA band 10-19, 20-29, 30-39, 40-49, and 50-59. Selection takes the lowest catalog-cost route in each band and prefers a different OpenRouter organization for the second route. The frozen panel is `calibration/data/experiment_1_panel.json`; validation produced 10 models across five bands and nine OpenRouter organizations. Explicit eligibility and exclusion records remain part of the hashed panel snapshot.
 
 ### - [x] T011 - Build the Artificial Analysis model mapping and snapshot
 
@@ -244,7 +244,7 @@ Create a versioned mapping file with stable catalog IDs, source citations, manua
 
 **Implementation Details**
 
-Added versioned `ArtificialAnalysisMapping`/`ArtificialAnalysisSnapshot` records and a YAML mapping loader/template with stable catalog IDs, exact model versions, raw intelligence/coding/agentic/cost indices, dates, source citations, and manual-override rationale. Validation rejects duplicate OpenRouter or AA version mappings, missing citations, and catalog-absent IDs; snapshot hashes change on mapping changes.
+Added versioned `ArtificialAnalysisMapping`/`ArtificialAnalysisSnapshot` records and populated `calibration/data/artificial_analysis_mapping.yaml` with the 10 selected OpenRouter routes and their dated AA intelligence, coding, agentic, and cost values. Validation rejects duplicate OpenRouter or AA version mappings, missing citations, and catalog-absent IDs. Validation against the live OpenRouter catalog produced catalog hash `ac70d491659abe1c7dcfb231da287e85655f42a7ff7ffb0a421ad4d4b9551a26` and AA snapshot hash `fe55f37cae6bc7c76a36521289dfbfb9197967b98b0e740f0ff017f38cfa4913`.
 
 ### - [x] T012 - Implement deterministic OpenRouter routing locks
 
@@ -605,7 +605,7 @@ Implement adapters, select adjacent rather than identical benchmark components w
 
 **Implementation Details**
 
-Added the frozen Phase 4 experiment-plan registry and shared reference-task adapter contract. Experiment 1 covers MMLU-adjacent tasks, GPQA, GSM8K, ProofWriter, PubMedQA, LegalBench, and FinQA with task-family prompts, exact-score scorers, Artificial Analysis overlap annotations, 2,000–5,000-case sample bounds, explicit holdouts, and content-hashed plan freezing.
+Frozen the deterministic 2,000-case corpus at `.calibration-runs/experiment-1/dataset/experiment-1-cases.jsonl` (SHA-256 `ce815160efb46b545a8f8eca9cc63d7e6b9a3a2ed6477a010348b2fa4a08f915`) and the seeded 400-case repeat slice at `.calibration-runs/experiment-1/dataset/experiment-1-repeat-cases.jsonl` (SHA-256 `ad1f0bdec1630857c5186abfaf241652ad04217fb0c01b6f6c790194917cb7d7`). The dataset lock records pinned source revisions, licenses, retrieval metadata, normalization exclusions, five 400-case task-family strata, and complete GPQA/LegalBench holdouts. Prompts are pinned as `experiment-1-reference-task-v1` with the deterministic `answer_exact_match` scorer.
 
 ### - [x] T029 - Execute Experiment 1 model panel
 
@@ -626,7 +626,7 @@ Create the approved manifest, run preflight, execute through OpenRouter, resume 
 
 **Implementation Details**
 
-Added Experiment 1 manifest gates for temperature-zero pinned baseline cells, single deterministic main attempts, model holdout requirements, and fixed sample IDs. Coverage reports enforce the missing-cell tolerance and retain integrity errors; the existing resumable runner, preflight, durable attempts, costs, provenance, and Parquet export path provide the execution flow.
+Executed the frozen ten-model panel at temperature zero (20,000 deterministic cells) and the 400-case × three-attempt repeat slice (12,000 scored cells). The corrected main run is `f30ab17d-531f-4256-8270-607974be7c51` (manifest SHA-256 `ca8274ca15309b557a69893f8ab23fb962869d97329d73f9d157a281dd6dd21f`, actual cost `$15.3600129865116`); repeats are `5c455a2c-c0ab-4579-9b27-083a5218c06b` (manifest SHA-256 `3214a1151a5f7a9f770d1ac9c542e74467058580b4732092d08f7b0632db0d58`, actual cost `$7.8163136627004`). Recovered all 1,224 unique `length`/empty-final cells with frozen 4,096-token manifests; recovery lock SHA-256 `66c6af81039e35be679e6ee8ed14f811a8b1692c9c2c4f87fc17a33ebfc6792e`, actual recovery cost `$1.73816440582455`, combined actual cost `$24.91449105503655`. All ten recovery SQLite runs passed provenance and content-addressed artifact audits, and their Parquet exports are under `.calibration-runs/experiment-1/recovery/runs/*/exports`.
 
 ### - [x] T030 - Fit and decide Experiment 1 parameters
 
@@ -647,7 +647,17 @@ Fit the raw Bernoulli likelihood, evaluate complete held-out datasets and models
 
 **Implementation Details**
 
-Implemented raw Bernoulli monotone-curve fitting with six segments, fixed first slope 1.0, positive nondecreasing later slopes, grouped dataset/model/prompt effects, initial 8:5:3 tau ratios, held-out log-loss/Brier evaluation, grouped bootstrap support, and explicit keep/change decisions using the 2% log-loss, 1% Brier, and 80% stability rules.
+Locked corrected fitting data at `.calibration-runs/experiment-1/fitting-corrected-v2/experiment-1-corrected-fitting-data.jsonl` (SHA-256 `03a557ec4cda05f061c0aca41165106c33bb49503d58daf09060ef69b24f644f`) with lock SHA-256 `a784fcdd90674470d00b2cbb47b1e3eb7f451ae49ec08980956d2fd8bdcae7b0`. It contains 20,000 deterministic observations, applies 746 usable recoveries, retains GPQA/LegalBench and Qwen3 Next 80B A3B/DeepSeek V4 Flash/Grok 4.5 holdouts, and keeps the repeat persistence estimate (`0.529`) provisional with active error floor `0.01`. The candidate profile is `.calibration-runs/experiment-1/fitting-corrected-v2/candidate-profile.json` (hash `6d97164936a9c8aedbcbd138f5aac719e17b4b42e24e78e84f0f8ac295ec7916`): six monotone slopes start at `1.0`; tau remains proportional `80:50:30` (8:5:3). Held-out log loss improved 67.44%, Brier score improved 52.30%, and grouped-bootstrap sign agreement was 100%; documented decision: `change`, retained as an unpromoted candidate pending explicit reviewer approval in `.calibration-runs/experiment-1/fitting-corrected-v2/decision.md`.
+
+The reviewed v4 LLM-as-judge rescore recovered all 20,000 main and 12,000 repeat
+judgments and produced a locked fit in `.calibration-runs/experiment-1/judge-fit-v4`.
+Its decision is `keep`: no curve or tau change cleared the independent holdout
+and stability gates, so the default slopes, `8:5:3` tau values, and active `0.01`
+error floor remain unchanged. A separate 200-example, three-human-annotator
+comparison against NVIDIA Judge's Verdict achieved 84.5% agreement under the
+strict human-correct definition (82.9% sensitivity; 85.5% specificity), below
+the 90% validation thresholds. The judge therefore remains unvalidated and the
+candidate is not eligible for promotion.
 
 ### - [x] T031 - Implement and execute Experiment 2
 

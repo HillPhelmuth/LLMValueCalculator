@@ -102,7 +102,11 @@ def select_model_panel(
             mapping = aa_snapshot.mapping_for(model.id)
         except Exception as error:
             reasons.append(str(error))
-        if experiment_one and mapping is not None and mapping.intelligence_index is None:
+        if (
+            experiment_one
+            and mapping is not None
+            and mapping.intelligence_index is None
+        ):
             reasons.append("Artificial Analysis intelligence index is missing")
         if not model.available:
             reasons.append("model is unavailable")
@@ -110,25 +114,35 @@ def select_model_panel(
             reasons.append("model has expired")
         if rules.require_versioned and not (model.versioned or model.resolved_model):
             reasons.append("model is an unversioned rolling alias")
-        if model.context_length is None or model.context_length < rules.required_context_length:
-            reasons.append("context length is below the experiment requirement")
         if (
-            rules.required_output_tokens
-            and (model.max_completion_tokens is None or model.max_completion_tokens < rules.required_output_tokens)
+            model.context_length is None
+            or model.context_length < rules.required_context_length
+        ):
+            reasons.append("context length is below the experiment requirement")
+        if rules.required_output_tokens and (
+            model.max_completion_tokens is None
+            or model.max_completion_tokens < rules.required_output_tokens
         ):
             reasons.append("provider output limit is below the experiment requirement")
         missing_parameters = [
-            parameter for parameter in rules.required_parameters if not model.supports(parameter)
+            parameter
+            for parameter in rules.required_parameters
+            if not model.supports(parameter)
         ]
         if missing_parameters:
-            reasons.append(f"missing supported parameters: {', '.join(missing_parameters)}")
+            reasons.append(
+                f"missing supported parameters: {', '.join(missing_parameters)}"
+            )
         missing_modalities = [
-            modality for modality in rules.required_modalities if modality not in model.modalities
+            modality
+            for modality in rules.required_modalities
+            if modality not in model.modalities
         ]
         if missing_modalities:
             reasons.append(f"missing modalities: {', '.join(missing_modalities)}")
         if rules.require_tools and not any(
-            parameter in model.supported_parameters for parameter in ("tools", "tool_choice")
+            parameter in model.supported_parameters
+            for parameter in ("tools", "tool_choice")
         ):
             reasons.append("tool calling is not supported")
         if rules.require_json and not any(
@@ -151,12 +165,16 @@ def select_model_panel(
             candidates.append((model, mapping, aa_band))
 
     if not candidates:
-        raise EligibilityError("No eligible models remain after catalog and capability filters")
-    if experiment_one:
-        _require_experiment_one_coverage(candidates, rules.minimum_models)
-    if len(candidates) < rules.minimum_models:
         raise EligibilityError(
-            f"Only {len(candidates)} eligible models; {rules.minimum_models} are required"
+            "No eligible models remain after catalog and capability filters"
+        )
+    required_models = 10 if experiment_one else rules.minimum_models
+    if experiment_one:
+        _require_experiment_one_coverage(candidates, required_models)
+        candidates = _select_experiment_one_candidates(candidates)
+    if len(candidates) < required_models:
+        raise EligibilityError(
+            f"Only {len(candidates)} eligible models; {required_models} are required"
         )
     candidates.sort(
         key=lambda item: (
@@ -184,16 +202,17 @@ def select_model_panel(
 def _require_experiment_one_coverage(
     candidates: list[tuple[ModelCatalogEntry, Any, int]], minimum_models: int
 ) -> None:
-    if minimum_models < 12:
-        minimum_models = 12
+    if minimum_models < 10:
+        minimum_models = 10
     bands: dict[int, int] = {}
     for _, _, band in candidates:
         if band is not None:
             bands[band] = bands.get(band, 0) + 1
-    underrepresented = sorted(band for band, count in bands.items() if count < 2)
+    required_bands = (10, 20, 30, 40, 50)
+    underrepresented = [band for band in required_bands if bands.get(band, 0) < 2]
     if underrepresented:
         raise EligibilityError(
-            "Experiment 1 has populated intelligence bands with fewer than two models: "
+            "Experiment 1 requires two models in each accepted intelligence band: "
             + ", ".join(str(band) for band in underrepresented)
         )
     if len(candidates) < minimum_models:
@@ -202,9 +221,39 @@ def _require_experiment_one_coverage(
         )
 
 
+def _select_experiment_one_candidates(
+    candidates: list[tuple[ModelCatalogEntry, Any, int]],
+) -> list[tuple[ModelCatalogEntry, Any, int]]:
+    selected: list[tuple[ModelCatalogEntry, Any, int]] = []
+    for band in (10, 20, 30, 40, 50):
+        rows = sorted(
+            (row for row in candidates if row[2] == band),
+            key=lambda row: (_catalog_unit_cost(row[0]), row[0].id),
+        )
+        first = rows[0]
+        first_provider = first[0].id.split("/", 1)[0]
+        second = next(
+            (row for row in rows[1:] if row[0].id.split("/", 1)[0] != first_provider),
+            rows[1],
+        )
+        selected.extend((first, second))
+    return selected
+
+
+def _catalog_unit_cost(model: ModelCatalogEntry) -> Decimal:
+    return (model.pricing.get("prompt") or Decimal("0")) + (
+        model.pricing.get("completion") or Decimal("0")
+    )
+
+
 def _is_experiment_one(experiment_id: str) -> bool:
     normalized = experiment_id.casefold().replace("_", "-")
-    return normalized in {"1", "experiment-1", "exp-1", "intelligence-curve"} or normalized.startswith("experiment-1-")
+    return normalized in {
+        "1",
+        "experiment-1",
+        "exp-1",
+        "intelligence-curve",
+    } or normalized.startswith("experiment-1-")
 
 
 def _aa_band(index: Decimal | None) -> int | None:
@@ -220,5 +269,7 @@ def _parse_date(value: str) -> date:
 
 def _hash_json(value: Any) -> str:
     return hashlib.sha256(
-        json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        json.dumps(
+            value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
     ).hexdigest()

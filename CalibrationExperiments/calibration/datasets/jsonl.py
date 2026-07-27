@@ -40,7 +40,8 @@ class JsonlDatasetAdapter(DatasetAdapter):
                 if not line.strip():
                     continue
                 row = json.loads(line)
-                if row.get("split", self._config.split) != split:
+                row_split = str(row.get("split", self._config.split))
+                if split != "all" and row_split != split:
                     continue
                 try:
                     case_id = str(row["case_id"])
@@ -58,9 +59,15 @@ class JsonlDatasetAdapter(DatasetAdapter):
 
                 metadata = row.get("metadata", {})
                 if not isinstance(metadata, dict):
-                    raise ValueError(f"metadata must be an object on line {line_number}")
+                    raise ValueError(
+                        f"metadata must be an object on line {line_number}"
+                    )
                 if "label_available" in row:
-                    metadata = {**metadata, "label_available": bool(row["label_available"])}
+                    metadata = {
+                        **metadata,
+                        "label_available": bool(row["label_available"]),
+                    }
+                metadata = {**metadata, "evaluation_split": row_split}
 
                 yield CanonicalCase(
                     case_id=case_id,
@@ -89,9 +96,11 @@ class JsonlDatasetAdapter(DatasetAdapter):
         extra = {key: value for key, value in case.metadata.items() if key not in known}
         return CaseFeatures(
             case_id=case.case_id,
-            dataset_id=self._config.adapter,
+            dataset_id=_string_or_none(case.metadata.get("dataset_id"))
+            or self._config.adapter,
             dataset_revision=self._config.revision,
-            split=self._config.split,
+            split=_string_or_none(case.metadata.get("evaluation_split"))
+            or self._config.split,
             category=_string_or_none(case.metadata.get("category")),
             base_difficulty_stratum=_string_or_none(
                 case.metadata.get("base_difficulty_stratum")
@@ -100,9 +109,7 @@ class JsonlDatasetAdapter(DatasetAdapter):
             reasoning_depth=_string_or_none(case.metadata.get("reasoning_depth")),
             domain_band=_string_or_none(case.metadata.get("domain_band")),
             tool_horizon=_string_or_none(case.metadata.get("tool_horizon")),
-            verifiability_band=_string_or_none(
-                case.metadata.get("verifiability_band")
-            ),
+            verifiability_band=_string_or_none(case.metadata.get("verifiability_band")),
             output_band=_string_or_none(case.metadata.get("output_band")),
             criticality_band=_string_or_none(case.metadata.get("criticality_band")),
             feature_json=extra,

@@ -1,0 +1,67 @@
+version: "1.0"
+retrieved_as_of: "2026-07-18"
+sources:
+  mmlu:
+    repository: cais/mmlu
+    revision: c30699e8356da336a370243923dbaf21066bb9fe
+    license: MIT
+    terms_url: https://huggingface.co/datasets/cais/mmlu
+    config: all
+    split: test
+    task_family: knowledge
+    format: multiple_choice
+  gpqa:
+    repository: Idavidrein/gpqa
+    revision: 633f5ee89ab8ad4522a9f850766b73f62147ffdd
+    license: CC-BY-4.0
+    terms_url: https://huggingface.co/datasets/Idavidrein/gpqa
+    config: gpqa_diamond
+    split: train
+    source_url: https://huggingface.co/datasets/Idavidrein/gpqa/resolve/633f5ee89ab8ad4522a9f850766b73f62147ffdd/gpqa_diamond.csv
+    task_family: knowledge
+    format: gpqa
+    gated: true
+  gsm8k:
+    repository: openai/gsm8k
+    revision: 740312add88f781978c0658806c59bc2815b9866
+    license: MIT
+    terms_url: https://huggingface.co/datasets/openai/gsm8k
+    config: main
+    split: test
+    task_family: mathematics
+    format: gsm8k
+  proofwriter:
+    repository: tasksource/proofwriter
+    revision: ee4d22d49b8486786cbc01c0b6f6f6266e56f3bd
+    license: CC-BY-4.0
+    terms_url: https://allenai.org/data/proofwriter
+    config: default
+    split: test
+    task_family: logic
+    format: proofwriter
+  pubmedqa:
+    repository: qiaojin/PubMedQA
+    revision: 9001f2853fb87cab8d220904e0de81ac6973b318
+    license: MIT
+    terms_url: https://huggingface.co/datasets/qiaojin/PubMedQA
+    config: pqa_labeled
+    split: train
+    task_family: domain
+    format: pubmedqa
+  legalbench:
+    repository: nguha/legalbench
+    revision: daec8237410aa23e3faf4bc41ad8b3a7e1696826
+    license: CC-BY-4.0
+    terms_url: https://github.com/HazyResearch/legalbench
+    config: all
+    split: test
+    task_family: classification
+    format: legalbench
+  finqa:
+    repository: czyssrs/FinQA
+    revision: 0f16e2867befa6840783e58be38c9efb9229d742
+    license: MIT
+    terms_url: https://github.com/czyssrs/FinQA
+    source_url: https://raw.githubusercontent.com/czyssrs/FinQA/0f16e2867befa6840783e58be38c9efb9229d742/dataset/test.json
+    task_family: domain
+    format: finqa

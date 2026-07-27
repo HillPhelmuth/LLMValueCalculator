@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -136,14 +137,22 @@ class ArtifactStore:
             for path in self.root.rglob("*")
             if path.is_file() and not path.name.endswith(".meta.json")
         }
-        for metadata_path in self.root.rglob("*.meta.json"):
+        metadata_paths = tuple(self.root.rglob("*.meta.json"))
+
+        def verify(metadata_path: Path) -> str | None:
             relative = metadata_path.relative_to(self.root).as_posix()
             uri = relative.removesuffix(".meta.json")
             try:
                 metadata = self._read_metadata(uri)
                 self._read_and_verify(uri, metadata)
             except (OSError, ValueError, json.JSONDecodeError) as error:
-                errors.append(f"{uri}: {error}")
+                return f"{uri}: {error}"
+            return None
+
+        # Raw response artifacts are independent. Parallel hashing keeps a
+        # full immutable audit practical for the 20,000-cell judge exports.
+        with ThreadPoolExecutor(max_workers=min(32, max(1, len(metadata_paths)))) as pool:
+            errors.extend(item for item in pool.map(verify, metadata_paths) if item)
         metadata_files = {
             path.relative_to(self.root).as_posix().removesuffix(".meta.json")
             for path in self.root.rglob("*.meta.json")

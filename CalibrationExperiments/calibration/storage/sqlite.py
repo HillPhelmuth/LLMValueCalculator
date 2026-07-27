@@ -331,7 +331,9 @@ class SqliteRunStore:
         )
         columns = {
             str(row[1])
-            for row in self._connection.execute("PRAGMA table_info(budget_events)").fetchall()
+            for row in self._connection.execute(
+                "PRAGMA table_info(budget_events)"
+            ).fetchall()
         }
         if "estimated_usd" not in columns:
             self._connection.execute(
@@ -355,9 +357,7 @@ class SqliteRunStore:
             self._connection.execute(
                 "ALTER TABLE runs ADD COLUMN resolved_manifest_json TEXT NOT NULL DEFAULT '{}'"
             )
-            self._connection.execute(
-                "ALTER TABLE runs ADD COLUMN heartbeat_utc TEXT"
-            )
+            self._connection.execute("ALTER TABLE runs ADD COLUMN heartbeat_utc TEXT")
             self._connection.execute(
                 "ALTER TABLE runs ADD COLUMN cancellation_requested INTEGER NOT NULL DEFAULT 0"
             )
@@ -428,9 +428,13 @@ class SqliteRunStore:
         self._connection.execute("PRAGMA foreign_keys = ON")
 
     def _table_exists(self, table: str) -> bool:
-        return self._connection.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)
-        ).fetchone() is not None
+        return (
+            self._connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+                (table,),
+            ).fetchone()
+            is not None
+        )
 
     def _record_migration(self, version: int) -> None:
         self._connection.execute(
@@ -450,7 +454,9 @@ class SqliteRunStore:
         catalog_snapshot_hash: str | None = None,
     ) -> str:
         identifier = run_id or str(uuid.uuid4())
-        resolved = resolved_manifest or manifest.resolved(tuple(manifest.dataset.sample_ids))
+        resolved = resolved_manifest or manifest.resolved(
+            tuple(manifest.dataset.sample_ids)
+        )
         resolved_hash = str(resolved["resolved_manifest_hash"])
         provenance = provenance or build_run_provenance(
             manifest,
@@ -508,7 +514,12 @@ class SqliteRunStore:
     def _insert_provenance(self, run_id: str, provenance: RunProvenance) -> None:
         self._connection.execute(
             "INSERT INTO run_provenance(schema_version, provenance_id, run_id, provenance_json) VALUES (?, ?, ?, ?)",
-            (SCHEMA_VERSION, provenance.provenance_id, run_id, _json(provenance.to_json())),
+            (
+                SCHEMA_VERSION,
+                provenance.provenance_id,
+                run_id,
+                _json(provenance.to_json()),
+            ),
         )
 
     def _insert_model_snapshots(
@@ -569,7 +580,11 @@ class SqliteRunStore:
             raise ValueError(f"Unknown run ID: {run_id}")
         if row["manifest_hash"] != manifest.manifest_hash:
             raise ValueError("Cannot resume a run with a different manifest hash")
-        if resolved_manifest and row["resolved_manifest_hash"] != resolved_manifest["resolved_manifest_hash"]:
+        if (
+            resolved_manifest
+            and row["resolved_manifest_hash"]
+            != resolved_manifest["resolved_manifest_hash"]
+        ):
             raise ValueError("Cannot resume a run with a different resolved manifest")
         with self._connection:
             self._connection.execute(
@@ -580,7 +595,7 @@ class SqliteRunStore:
                 """
                 UPDATE work_items
                 SET status='pending', lease_owner=NULL, lease_expires_utc=NULL, heartbeat_utc=NULL
-                WHERE run_id=? AND status='leased'
+                WHERE run_id=? AND status IN ('leased', 'failed')
                 """,
                 (run_id,),
             )
@@ -765,7 +780,11 @@ class SqliteRunStore:
             "FROM budget_events WHERE " + " AND ".join(clauses),
             parameters,
         ).fetchone()
-        return {"usd": float(row[0]), "tokens": float(row[1]), "requests": float(row[2])}
+        return {
+            "usd": float(row[0]),
+            "tokens": float(row[1]),
+            "requests": float(row[2]),
+        }
 
     def record_budget_event(
         self,
@@ -806,7 +825,9 @@ class SqliteRunStore:
             )
         return event_id
 
-    def settle_budget_event(self, event_id: str, amount_usd: float, *, over_budget: bool = False) -> None:
+    def settle_budget_event(
+        self, event_id: str, amount_usd: float, *, over_budget: bool = False
+    ) -> None:
         status = "over_budget" if over_budget else "settled"
         with self._connection:
             cursor = self._connection.execute(
@@ -816,12 +837,21 @@ class SqliteRunStore:
             if cursor.rowcount != 1:
                 raise ValueError(f"Budget event is not reservable: {event_id}")
 
-    def record_monitoring_event(self, run_id: str, event_type: str, payload: dict[str, Any]) -> str:
+    def record_monitoring_event(
+        self, run_id: str, event_type: str, payload: dict[str, Any]
+    ) -> str:
         event_id = str(uuid.uuid4())
         with self._connection:
             self._connection.execute(
                 "INSERT INTO monitoring_events (schema_version, event_id, run_id, event_type, payload_json, created_utc) VALUES (?, ?, ?, ?, ?, ?)",
-                (SCHEMA_VERSION, event_id, run_id, event_type, _json(payload), utc_now_iso()),
+                (
+                    SCHEMA_VERSION,
+                    event_id,
+                    run_id,
+                    event_type,
+                    _json(payload),
+                    utc_now_iso(),
+                ),
             )
         return event_id
 
@@ -845,10 +875,14 @@ class SqliteRunStore:
 
     def queue_counts(self, run_id: str) -> dict[str, int]:
         rows = self._connection.execute(
-            "SELECT status, COUNT(*) FROM work_items WHERE run_id=? GROUP BY status", (run_id,)
+            "SELECT status, COUNT(*) FROM work_items WHERE run_id=? GROUP BY status",
+            (run_id,),
         ).fetchall()
         values = {str(row[0]): int(row[1]) for row in rows}
-        return {key: values.get(key, 0) for key in ("pending", "leased", "completed", "failed")}
+        return {
+            key: values.get(key, 0)
+            for key in ("pending", "leased", "completed", "failed")
+        }
 
     def cancellation_requested(self, run_id: str) -> bool:
         row = self._connection.execute(
@@ -953,6 +987,74 @@ class SqliteRunStore:
             if cursor.rowcount != 1:
                 raise ValueError("Work item lease is not owned by this worker")
 
+    def reconcile_completed_work_item(
+        self, work_item_id: str, run_id: str, request_hash: str
+    ) -> bool:
+        """Close a stale queue row only when its immutable attempt already exists.
+
+        A long-running provider call can outlive its lease even though its response
+        was durably recorded.  Reconciliation is deliberately conditioned on the
+        attempt's run and request hash, so it cannot turn an unexecuted cell into a
+        completed one.
+        """
+        with self._connection:
+            cursor = self._connection.execute(
+                """
+                UPDATE work_items
+                SET status='completed', completed_utc=?, lease_owner=NULL,
+                    lease_expires_utc=NULL, heartbeat_utc=NULL
+                WHERE work_item_id=? AND run_id=? AND status <> 'completed'
+                  AND EXISTS (
+                      SELECT 1 FROM attempts
+                      WHERE attempts.run_id=? AND attempts.request_hash=?
+                  )
+                """,
+                (utc_now_iso(), work_item_id, run_id, run_id, request_hash),
+            )
+        return cursor.rowcount == 1
+
+    def reconcile_recorded_work_items(self, run_id: str) -> int:
+        """Close every stale queue row for a run that already has an attempt."""
+        with self._connection:
+            cursor = self._connection.execute(
+                """
+                UPDATE work_items
+                SET status='completed', completed_utc=?, lease_owner=NULL,
+                    lease_expires_utc=NULL, heartbeat_utc=NULL
+                WHERE run_id=? AND status <> 'completed'
+                  AND EXISTS (
+                      SELECT 1 FROM attempts
+                      WHERE attempts.run_id=work_items.run_id
+                        AND attempts.request_hash=work_items.request_hash
+                  )
+                """,
+                (utc_now_iso(), run_id),
+            )
+        return cursor.rowcount
+
+    def has_recorded_attempt(self, run_id: str, request_hash: str) -> bool:
+        return (
+            self._connection.execute(
+                "SELECT 1 FROM attempts WHERE run_id=? AND request_hash=? LIMIT 1",
+                (run_id, request_hash),
+            ).fetchone()
+            is not None
+        )
+
+    def fail_work_item(self, work_item_id: str, owner: str) -> None:
+        with self._connection:
+            cursor = self._connection.execute(
+                """
+                UPDATE work_items
+                SET status='failed', completed_utc=?, lease_owner=NULL,
+                    lease_expires_utc=NULL
+                WHERE work_item_id=? AND status='leased' AND lease_owner=?
+                """,
+                (utc_now_iso(), work_item_id, owner),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("Work item lease is not owned by this worker")
+
     def recover_expired_leases(self) -> int:
         now = utc_now_iso()
         with self._connection:
@@ -1007,18 +1109,18 @@ class SqliteRunStore:
             "provider_cost": response.provider_cost,
             "finish_reason": response.finish_reason,
             "refusal": response.refusal,
-                    "response_id": response.response_id,
-                    "from_cache": from_cache,
-                    "created_utc": response.created_utc,
-                    "resolved_model": response.resolved_model,
-                    "resolved_provider": response.resolved_provider,
-                    "endpoint": response.endpoint,
-                    "content": response.content,
-                    "router_metadata": response.router_metadata,
-                    "usage": response.usage,
-                    "calculated_cost": response.calculated_cost,
-                    "cost_reconciliation": response.cost_reconciliation,
-                }
+            "response_id": response.response_id,
+            "from_cache": from_cache,
+            "created_utc": response.created_utc,
+            "resolved_model": response.resolved_model,
+            "resolved_provider": response.resolved_provider,
+            "endpoint": response.endpoint,
+            "content": response.content,
+            "router_metadata": response.router_metadata,
+            "usage": response.usage,
+            "calculated_cost": response.calculated_cost,
+            "cost_reconciliation": response.cost_reconciliation,
+        }
         validate_record("attempt", attempt_record)
         for score in scores:
             validate_record(
@@ -1041,9 +1143,9 @@ class SqliteRunStore:
                 },
             )
         with self._connection:
-            self._connection.execute(
+            cursor = self._connection.execute(
                 """
-                INSERT INTO attempts (
+                INSERT OR IGNORE INTO attempts (
                     schema_version, attempt_id, run_id, case_id, condition_id, model_id,
                     model_version, provider, prompt_version, repeat_index, parent_attempt_id,
                     request_hash, raw_request_uri, raw_response_uri, latency_ms,
@@ -1087,6 +1189,14 @@ class SqliteRunStore:
                     _json(response.cost_reconciliation),
                 ),
             )
+            if cursor.rowcount == 0:
+                existing = self._connection.execute(
+                    "SELECT attempt_id FROM attempts WHERE run_id=? AND request_hash=?",
+                    (run_id, request.request_hash),
+                ).fetchone()
+                if existing is None:
+                    raise RuntimeError("Attempt conflict could not be reconciled")
+                return str(existing["attempt_id"])
             self._connection.executemany(
                 """
                 INSERT INTO scores (
@@ -1248,7 +1358,9 @@ class SqliteRunStore:
         query = allowed.get(table)
         if query is None:
             raise ValueError(f"Unsupported export table: {table}")
-        return [dict(row) for row in self._connection.execute(query, (run_id,)).fetchall()]
+        return [
+            dict(row) for row in self._connection.execute(query, (run_id,)).fetchall()
+        ]
 
     def record_export(
         self, run_id: str, export_name: str, uri: str, sha256: str, row_count: int
@@ -1261,7 +1373,15 @@ class SqliteRunStore:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(run_id, export_name) DO NOTHING
                 """,
-                (SCHEMA_VERSION, run_id, export_name, uri, sha256, row_count, utc_now_iso()),
+                (
+                    SCHEMA_VERSION,
+                    run_id,
+                    export_name,
+                    uri,
+                    sha256,
+                    row_count,
+                    utc_now_iso(),
+                ),
             )
 
     def audit_provenance(self, run_id: str) -> list[str]:
@@ -1271,13 +1391,19 @@ class SqliteRunStore:
         ).fetchone()
         if run is None:
             return [f"Unknown run ID: {run_id}"]
-        if self._connection.execute(
-            "SELECT 1 FROM run_provenance WHERE run_id=?", (run_id,)
-        ).fetchone() is None:
+        if (
+            self._connection.execute(
+                "SELECT 1 FROM run_provenance WHERE run_id=?", (run_id,)
+            ).fetchone()
+            is None
+        ):
             errors.append("run has no provenance record")
-        if self._connection.execute(
-            "SELECT 1 FROM model_snapshots WHERE run_id=?", (run_id,)
-        ).fetchone() is None:
+        if (
+            self._connection.execute(
+                "SELECT 1 FROM model_snapshots WHERE run_id=?", (run_id,)
+            ).fetchone()
+            is None
+        ):
             errors.append("run has no model snapshot records")
         orphan_scores = self._connection.execute(
             "SELECT COUNT(*) FROM scores s LEFT JOIN attempts a ON a.attempt_id=s.attempt_id WHERE a.attempt_id IS NULL"
@@ -1304,7 +1430,9 @@ class SqliteRunStore:
         ).fetchall():
             source_ids = set(json.loads(estimate["source_row_ids_json"]))
             if not source_ids or not source_ids.issubset(attempts | score_rows):
-                errors.append(f"estimate {estimate['estimate_id']} has incomplete source lineage")
+                errors.append(
+                    f"estimate {estimate['estimate_id']} has incomplete source lineage"
+                )
         return errors
 
     def run_summary(self, run_id: str) -> dict[str, object]:

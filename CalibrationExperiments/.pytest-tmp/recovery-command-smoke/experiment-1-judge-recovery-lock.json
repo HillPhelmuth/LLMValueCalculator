@@ -1,0 +1,12 @@
+{
+  "dataset_hash": "643a5d18be0ffe674f5c987768ed0648c90f59c5099c82e9a97de0ceffa14226",
+  "failed_transport_cells": 0,
+  "judge_ceiling_usd": 25.0,
+  "lock_hash": "96b0415f3c9435ce99abbebd9b7b2f066ecaaf6b00ba6f264f43804fbca3f75e",
+  "malformed_or_truncated_cells": 129,
+  "prior_judge_spend_usd": 1.51191817494,
+  "projected_recovery_cost_usd": 0.310689792,
+  "selected_cells": 129,
+  "source_manifest_hash": "f4ee1dfc84fb9cd412437d306f6bb7ad863f46950fc0c158b789a8327a1c6043",
+  "source_run_id": "3e2945a9-30bc-498b-b01f-208026473574"
+}

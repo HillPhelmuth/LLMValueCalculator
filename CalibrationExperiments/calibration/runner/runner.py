@@ -72,7 +72,9 @@ class CalibrationRunner:
         if providers is None:
             configured: dict[str, ModelProvider] = {"fake": FakeProvider()}
             if any(model.provider == "openrouter" for model in manifest.models):
-                configured["openrouter"] = OpenRouterProvider.from_settings(catalog=catalog)
+                configured["openrouter"] = OpenRouterProvider.from_settings(
+                    catalog=catalog, max_concurrency=max_workers
+                )
             self.providers = configured
         else:
             self.providers = providers
@@ -120,7 +122,9 @@ class CalibrationRunner:
             by_id = {case.case_id: case for case in cases}
             missing = sorted(set(self.manifest.dataset.sample_ids) - set(by_id))
             if missing:
-                raise ValueError(f"Locked sample IDs are missing from the dataset: {missing}")
+                raise ValueError(
+                    f"Locked sample IDs are missing from the dataset: {missing}"
+                )
             cases = [by_id[case_id] for case_id in self.manifest.dataset.sample_ids]
         if max_cases is not None:
             cases = cases[:max_cases]
@@ -140,7 +144,9 @@ class CalibrationRunner:
             resolved_manifest["catalog_snapshot_hash"] = self.catalog.snapshot_hash
             resolved_manifest["catalog_snapshot_id"] = self.catalog.snapshot_id
             resolved_manifest["compatibility_hash"] = compatibility_hash(compatibility)
-            resolved_manifest["resolved_manifest_hash"] = _hash_resolved(resolved_manifest)
+            resolved_manifest["resolved_manifest_hash"] = _hash_resolved(
+                resolved_manifest
+            )
 
         if resume_run_id:
             run_id = resume_run_id
@@ -151,12 +157,19 @@ class CalibrationRunner:
                 code_commit=code_commit or _git_commit(self.manifest_path.parent),
                 resolved_manifest=resolved_manifest,
                 dependency_lock=_dependency_lock_path(self.manifest_path),
-                catalog_snapshot_hash=None if self.catalog is None else self.catalog.snapshot_hash,
+                catalog_snapshot_hash=None
+                if self.catalog is None
+                else self.catalog.snapshot_hash,
             )
 
         for case in cases:
             self.store.put_case_features(run_id, self.dataset.metadata(case))
 
+        reconciled = self.store.reconcile_recorded_work_items(run_id)
+        if reconciled:
+            self.store.record_monitoring_event(
+                run_id, "stale_work_items_reconciled", {"count": reconciled}
+            )
         completed = self.store.completed_request_hashes(run_id)
         random.Random(self.manifest.dataset.sample_seed).shuffle(work_items)
         queue: asyncio.Queue[WorkItem] = asyncio.Queue()
@@ -193,7 +206,13 @@ class CalibrationRunner:
             if self.store.cancellation_requested(run_id):
                 self.store.set_run_status(run_id, "cancelled")
             else:
-                self.store.mark_completed(run_id)
+                failed = self.store.queue_counts(run_id)["failed"]
+                if failed:
+                    self.store.mark_failed(
+                        run_id, f"{failed} work items exhausted transport retries"
+                    )
+                else:
+                    self.store.mark_completed(run_id)
         except RunCancelled as error:
             self.store.record_monitoring_event(
                 run_id, "run_cancelled", {"message": str(error), "resumable": True}
@@ -255,7 +274,9 @@ class CalibrationRunner:
         metadata = item.case.metadata
         tools = metadata.get("tools", ())
         if not isinstance(tools, (list, tuple)):
-            raise ValueError(f"Case {item.case.case_id} tools metadata must be an array")
+            raise ValueError(
+                f"Case {item.case.case_id} tools metadata must be an array"
+            )
         response_format = metadata.get("response_format")
         if response_format is not None and not isinstance(response_format, dict):
             raise ValueError(
@@ -290,21 +311,28 @@ class CalibrationRunner:
         if request.request_hash in completed:
             return
         owner = f"runner-{uuid.uuid4()}"
-        if self.store.claim_work_item(
-            run_id, owner, work_item_id=work_item_id
-        ) != work_item_id:
+        if (
+            self.store.claim_work_item(run_id, owner, work_item_id=work_item_id)
+            != work_item_id
+        ):
             return
-        work_heartbeat = asyncio.create_task(self._work_item_heartbeat(work_item_id, owner))
+        work_heartbeat = asyncio.create_task(
+            self._work_item_heartbeat(work_item_id, owner)
+        )
         try:
             raw_request_uri = self.artifacts.put_json(asdict(request))
             cached_uri = self.store.cached_response_uri(request.request_hash)
             if cached_uri:
-                response = ProviderResponse.from_json(self.artifacts.get_json(cached_uri))
+                response = ProviderResponse.from_json(
+                    self.artifacts.get_json(cached_uri)
+                )
                 from_cache = True
             else:
                 response = await self._call_provider(run_id, request)
                 serialized_request = getattr(
-                    self.providers[request.provider], "serialized_request_for", lambda _: None
+                    self.providers[request.provider],
+                    "serialized_request_for",
+                    lambda _: None,
                 )(request.request_hash)
                 if serialized_request:
                     raw_request_uri = self.artifacts.put_json(
@@ -333,7 +361,19 @@ class CalibrationRunner:
                 scores=scores,
                 from_cache=from_cache,
             )
-            self.store.complete_work_item(work_item_id, owner)
+            try:
+                self.store.complete_work_item(work_item_id, owner)
+            except ValueError:
+                # The response and scores are already immutable.  If a lease was
+                # recovered while the provider call was in flight, reconcile only
+                # against that exact recorded request rather than issuing it again.
+                if not (
+                    self.store.reconcile_completed_work_item(
+                        work_item_id, run_id, request.request_hash
+                    )
+                    or self.store.has_recorded_attempt(run_id, request.request_hash)
+                ):
+                    raise
             self.store.record_monitoring_event(
                 run_id,
                 "attempt_completed",
@@ -344,6 +384,30 @@ class CalibrationRunner:
                 },
             )
             completed.add(request.request_hash)
+        except BudgetExceeded:
+            raise
+        except Exception as error:
+            try:
+                self.store.fail_work_item(work_item_id, owner)
+            except ValueError:
+                # A reclaimed lease is now owned by another worker.  That worker
+                # will either record the exact response or leave the cell queued;
+                # do not abort the whole run merely because this worker is stale.
+                if self.store.has_recorded_attempt(run_id, request.request_hash):
+                    self.store.reconcile_completed_work_item(
+                        work_item_id, run_id, request.request_hash
+                    )
+            self.store.record_monitoring_event(
+                run_id,
+                "work_item_failed",
+                {
+                    "request_hash": request.request_hash,
+                    "model_id": request.model_id,
+                    "error_type": type(error).__name__,
+                    "message": str(error),
+                    "resumable": True,
+                },
+            )
         finally:
             work_heartbeat.cancel()
             await asyncio.gather(work_heartbeat, return_exceptions=True)
@@ -364,8 +428,11 @@ class CalibrationRunner:
                     run_id,
                     self.manifest,
                     request,
-                    estimated_usd=BudgetLedger.estimate_request_usd(request, self.catalog),
-                    token_count=estimate_request_tokens(request) + request.max_output_tokens,
+                    estimated_usd=BudgetLedger.estimate_request_usd(
+                        request, self.catalog
+                    ),
+                    token_count=estimate_request_tokens(request)
+                    + request.max_output_tokens,
                 )
                 async with self._provider_semaphores[request.provider]:
                     response = await provider.complete(request)
@@ -399,7 +466,10 @@ class CalibrationRunner:
                 if reservation is not None:
                     self.budget_ledger.settle(self.store, reservation, None)
                 classification = classify_exception(error)
-                if not classification.retryable or transport_attempt >= self.transport_retries:
+                if (
+                    not classification.retryable
+                    or transport_attempt >= self.transport_retries
+                ):
                     self.store.record_transport_event(
                         run_id,
                         request.request_hash,
@@ -459,7 +529,9 @@ def _hash_resolved(value: dict[str, object]) -> str:
     material = dict(value)
     material.pop("resolved_manifest_hash", None)
     return hashlib.sha256(
-        json.dumps(material, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        json.dumps(
+            material, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
     ).hexdigest()
 
 

@@ -39,6 +39,8 @@ class BernoulliRow:
     case_id: str = "unknown"
     prompt_id: str = "unknown"
     category: str | None = None
+    difficulty: float | None = None
+    tau_key: str = "normal"
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,11 +62,15 @@ class MonotoneCurve:
         if len(self.slopes) != 6:
             raise FittingError("The intelligence curve requires six slope segments")
         if abs(self.slopes[0] - 1.0) > 1e-9:
-            raise FittingError("The first intelligence-curve slope must be fixed at 1.0")
+            raise FittingError(
+                "The first intelligence-curve slope must be fixed at 1.0"
+            )
         if any(slope <= 0 for slope in self.slopes[1:]) or any(
             left > right for left, right in zip(self.slopes[1:], self.slopes[2:])
         ):
-            raise FittingError("Later intelligence-curve slopes must be positive and nondecreasing")
+            raise FittingError(
+                "Later intelligence-curve slopes must be positive and nondecreasing"
+            )
         if not 0 <= self.error_floor < 1:
             raise FittingError("Error floor must be in [0, 1)")
         self.tau_ratios.validate()
@@ -75,16 +81,31 @@ class MonotoneCurve:
         for segment, slope in enumerate(self.slopes):
             width = 10.0 if segment < 5 else float("inf")
             distance = min(remaining, width)
-            value += slope * distance / 10.0
+            value += slope * distance
             remaining -= distance
             if remaining <= 0:
                 break
         return value
 
-    def predict(self, intelligence_index: float, *, effects: float = 0.0) -> float:
-        latent = self.latent_value(intelligence_index) + effects
+    def predict(
+        self,
+        intelligence_index: float,
+        *,
+        difficulty: float = 0.0,
+        tau_key: str = "normal",
+        effects: float = 0.0,
+    ) -> float:
+        tau = {
+            "soft": self.tau_ratios.normal,
+            "normal": self.tau_ratios.domain,
+            "sharp": self.tau_ratios.reasoning,
+        }.get(tau_key, self.tau_ratios.domain)
+        effective_tau = tau * _local_curve_slope(self.slopes, difficulty)
+        latent = (
+            self.latent_value(intelligence_index) - difficulty + effects
+        ) / effective_tau
         probability = _sigmoid(latent)
-        return self.error_floor + (1 - self.error_floor) * probability
+        return (1 - self.error_floor) * probability
 
     def to_json(self) -> dict[str, Any]:
         self.validate()
@@ -103,7 +124,10 @@ class CurveFitResult:
 
 
 def fit_monotone_curve(
-    rows: Iterable[BernoulliRow], *, error_floor: float = 0.02, tau_ratios: TauRatios | None = None
+    rows: Iterable[BernoulliRow],
+    *,
+    error_floor: float = 0.02,
+    tau_ratios: TauRatios | None = None,
 ) -> CurveFitResult:
     observations = tuple(rows)
     if not observations:
@@ -111,35 +135,70 @@ def fit_monotone_curve(
     tau = tau_ratios or TauRatios()
     tau.validate()
     fit_rows = tuple(row for row in observations if row.split == "fit") or observations
-    intercept = _logit(sum(row.success for row in fit_rows) / len(fit_rows))
+    fit_intercept = not any(row.difficulty is not None for row in fit_rows)
+    intercept = (
+        _logit(sum(row.success for row in fit_rows) / len(fit_rows))
+        if fit_intercept
+        else 0.0
+    )
     slopes = [1.0] * 6
+    tau_scale = 1.0
     for _ in range(300):
         gradients = [0.0] * 6
         intercept_gradient = 0.0
         for row in fit_rows:
-            probability = _curve_probability(intercept, slopes, row.intelligence_index, error_floor)
+            base_tau = {
+                "soft": tau.normal,
+                "normal": tau.domain,
+                "sharp": tau.reasoning,
+            }.get(row.tau_key, tau.domain)
+            probability = _curve_probability(
+                intercept,
+                slopes,
+                row.intelligence_index,
+                row.difficulty or 0.0,
+                base_tau * tau_scale,
+                error_floor,
+            )
             residual = probability - float(row.success)
             scale = probability * (1 - probability) / max(1e-9, 1 - error_floor)
-            intercept_gradient += residual * scale
+            intercept_gradient += residual * scale / (base_tau * tau_scale)
             remaining = max(0.0, row.intelligence_index)
             for segment in range(6):
                 width = 10.0 if segment < 5 else float("inf")
                 distance = min(remaining, width)
-                gradients[segment] += residual * scale * distance / 10.0
+                gradients[segment] += (
+                    residual * scale * distance / (base_tau * tau_scale)
+                )
                 remaining -= distance
                 if remaining <= 0:
                     break
         step = 0.05 / len(fit_rows)
-        intercept -= step * intercept_gradient
+        if fit_intercept:
+            intercept -= step * intercept_gradient
         for index in range(1, 6):
             slopes[index] -= step * gradients[index]
         slopes[0] = 1.0
         slopes[1:] = _project_monotone(slopes[1:])
+        alternatives = [
+            max(0.1, tau_scale * 0.98),
+            tau_scale,
+            min(10.0, tau_scale * 1.02),
+        ]
+        tau_scale = min(
+            alternatives,
+            key=lambda candidate: _row_log_loss(
+                fit_rows, intercept, slopes, tau, candidate, error_floor
+            ),
+        )
+    fitted_tau = TauRatios(
+        tau.normal * tau_scale, tau.domain * tau_scale, tau.reasoning * tau_scale
+    )
     curve = MonotoneCurve(
         intercept=intercept,
         slopes=tuple(slopes),
         error_floor=error_floor,
-        tau_ratios=tau,
+        tau_ratios=fitted_tau,
         group_effects=fit_group_effects(fit_rows),
     )
     curve.validate()
@@ -153,32 +212,58 @@ def fit_monotone_curve(
         brier_score=fit_metrics[1],
         held_out_log_loss=held_out_metrics[0],
         held_out_brier_score=held_out_metrics[1],
-        diagnostics={"fit_rows": len(fit_rows), "held_out_rows": len(held_out), "first_slope_fixed": True},
+        diagnostics={
+            "fit_rows": len(fit_rows),
+            "held_out_rows": len(held_out),
+            "first_slope_fixed": True,
+        },
     )
 
 
-def evaluate_curve(curve: MonotoneCurve, rows: Iterable[BernoulliRow]) -> tuple[float, float]:
+def evaluate_curve(
+    curve: MonotoneCurve, rows: Iterable[BernoulliRow]
+) -> tuple[float, float]:
     observations = tuple(rows)
     if not observations:
         return 0.0, 0.0
-    probabilities = [curve.predict(row.intelligence_index) for row in observations]
+    probabilities = [
+        curve.predict(
+            row.intelligence_index,
+            difficulty=row.difficulty or 0.0,
+            tau_key=row.tau_key,
+        )
+        for row in observations
+    ]
     log_loss = -sum(
         float(row.success) * math.log(max(1e-12, probability))
         + float(not row.success) * math.log(max(1e-12, 1 - probability))
         for row, probability in zip(observations, probabilities)
     ) / len(observations)
-    brier = sum((probability - float(row.success)) ** 2 for row, probability in zip(observations, probabilities)) / len(observations)
+    brier = sum(
+        (probability - float(row.success)) ** 2
+        for row, probability in zip(observations, probabilities)
+    ) / len(observations)
     return log_loss, brier
 
 
 def fit_group_effects(rows: Iterable[BernoulliRow]) -> GroupEffects:
     observations = tuple(rows)
-    global_rate = sum(row.success for row in observations) / len(observations) if observations else 0.5
+    global_rate = (
+        sum(row.success for row in observations) / len(observations)
+        if observations
+        else 0.5
+    )
     global_logit = _logit(global_rate)
     return GroupEffects(
-        dataset_effects=_group_logit_effects(observations, lambda row: row.dataset_id, global_logit),
-        model_effects=_group_logit_effects(observations, lambda row: row.model_id, global_logit),
-        prompt_effects=_group_logit_effects(observations, lambda row: row.prompt_id, global_logit),
+        dataset_effects=_group_logit_effects(
+            observations, lambda row: row.dataset_id, global_logit
+        ),
+        model_effects=_group_logit_effects(
+            observations, lambda row: row.model_id, global_logit
+        ),
+        prompt_effects=_group_logit_effects(
+            observations, lambda row: row.prompt_id, global_logit
+        ),
     )
 
 
@@ -203,7 +288,9 @@ def compare_candidate_curve(
     current_log, current_brier = evaluate_curve(current, held_out)
     candidate_log, candidate_brier = evaluate_curve(candidate, held_out)
     log_improvement = (current_log - candidate_log) / max(abs(current_log), 1e-12)
-    brier_improvement = (current_brier - candidate_brier) / max(abs(current_brier), 1e-12)
+    brier_improvement = (current_brier - candidate_brier) / max(
+        abs(current_brier), 1e-12
+    )
     reasons: list[str] = []
     if log_improvement < log_loss_threshold:
         reasons.append("held-out log-loss improvement is below 2 percent")
@@ -221,7 +308,11 @@ def compare_candidate_curve(
 
 
 def grouped_bootstrap(
-    rows: Iterable[BernoulliRow], *, groups: str = "model_id", repeats: int = 100, seed: int = 0
+    rows: Iterable[BernoulliRow],
+    *,
+    groups: str = "model_id",
+    repeats: int = 100,
+    seed: int = 0,
 ) -> tuple[tuple[BernoulliRow, ...], ...]:
     observations = tuple(rows)
     if groups not in {"model_id", "dataset_id", "case_id"}:
@@ -235,7 +326,11 @@ def grouped_bootstrap(
     rng = random.Random(seed)
     result: list[tuple[BernoulliRow, ...]] = []
     for _ in range(repeats):
-        result.append(tuple(row for key in (rng.choice(keys) for _ in keys) for row in grouped[key]))
+        result.append(
+            tuple(
+                row for key in (rng.choice(keys) for _ in keys) for row in grouped[key]
+            )
+        )
     return tuple(result)
 
 
@@ -251,23 +346,51 @@ class PairedEffectResult:
 
 
 def fit_paired_effects(
-    rows: Iterable[Mapping[str, Any]], *, tau: float, error_floor: float, group_key: str = "dataset_id"
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    tau: float,
+    error_floor: float,
+    group_key: str = "dataset_id",
 ) -> PairedEffectResult:
     data = tuple(rows)
     if not data or tau <= 0:
         raise FittingError("Paired effects require observations and positive tau")
-    probabilities = [(_as_probability(row["baseline_probability"]), _as_probability(row["treatment_probability"])) for row in data]
-    effects = [_probability_to_difficulty(base, treatment, tau, error_floor) for base, treatment in probabilities]
+    probabilities = [
+        (
+            _as_probability(row["baseline_probability"]),
+            _as_probability(row["treatment_probability"]),
+        )
+        for row in data
+    ]
+    effects = [
+        _probability_to_difficulty(base, treatment, tau, error_floor)
+        for base, treatment in probabilities
+    ]
     effect = sum(effects) / len(effects)
-    variance = sum((value - effect) ** 2 for value in effects) / max(1, len(effects) - 1)
+    variance = sum((value - effect) ** 2 for value in effects) / max(
+        1, len(effects) - 1
+    )
     margin = 1.96 * math.sqrt(variance / len(effects))
     grouped: dict[str, list[float]] = {}
     for row, value in zip(data, effects):
         grouped.setdefault(str(row.get(group_key, "unknown")), []).append(value)
     per_group = {key: sum(values) / len(values) for key, values in grouped.items()}
     sign_agreement = sum(value >= 0 for value in per_group.values()) / len(per_group)
-    decision = PromotionDecision.CHANGE if (effect - margin > 0 or effect + margin < 0) and max(sign_agreement, 1 - sign_agreement) >= 0.8 else PromotionDecision.KEEP
-    return PairedEffectResult(effect, effect - margin, effect + margin, max(sign_agreement, 1 - sign_agreement), per_group, decision, {"tau": tau, "error_floor": error_floor})
+    decision = (
+        PromotionDecision.CHANGE
+        if (effect - margin > 0 or effect + margin < 0)
+        and max(sign_agreement, 1 - sign_agreement) >= 0.8
+        else PromotionDecision.KEEP
+    )
+    return PairedEffectResult(
+        effect,
+        effect - margin,
+        effect + margin,
+        max(sign_agreement, 1 - sign_agreement),
+        per_group,
+        decision,
+        {"tau": tau, "error_floor": error_floor},
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -280,7 +403,11 @@ class OrdinalEffectResult:
 
 
 def fit_ordinal_effects(
-    rows: Iterable[Mapping[str, Any]], *, ordered_levels: tuple[str, ...], current_values: Mapping[str, float] | None = None, intervals: Mapping[str, tuple[float, float]] | None = None
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    ordered_levels: tuple[str, ...],
+    current_values: Mapping[str, float] | None = None,
+    intervals: Mapping[str, tuple[float, float]] | None = None,
 ) -> OrdinalEffectResult:
     grouped: dict[str, list[float]] = {level: [] for level in ordered_levels}
     for row in rows:
@@ -289,15 +416,32 @@ def fit_ordinal_effects(
             grouped[level].append(float(row["effect"]))
     effects: list[float] = []
     for level in ordered_levels:
-        estimate = sum(grouped[level]) / len(grouped[level]) if grouped[level] else float((current_values or {}).get(level, 0.0))
+        estimate = (
+            sum(grouped[level]) / len(grouped[level])
+            if grouped[level]
+            else float((current_values or {}).get(level, 0.0))
+        )
         current = (current_values or {}).get(level)
         if current is not None and intervals and level in intervals:
             lower, upper = intervals[level]
             if lower <= current <= upper:
                 estimate = current
         effects.append(max(effects[-1], estimate) if effects else estimate)
-    decision = PromotionDecision.CHANGE if any(abs(value - (current_values or {}).get(level, value)) > 1e-9 for level, value in zip(ordered_levels, effects)) else PromotionDecision.KEEP
-    return OrdinalEffectResult(ordered_levels, tuple(effects), all(left <= right for left, right in zip(effects, effects[1:])), decision, {"type": "ordinal_monotone", "levels": ordered_levels})
+    decision = (
+        PromotionDecision.CHANGE
+        if any(
+            abs(value - (current_values or {}).get(level, value)) > 1e-9
+            for level, value in zip(ordered_levels, effects)
+        )
+        else PromotionDecision.KEEP
+    )
+    return OrdinalEffectResult(
+        ordered_levels,
+        tuple(effects),
+        all(left <= right for left, right in zip(effects, effects[1:])),
+        decision,
+        {"type": "ordinal_monotone", "levels": ordered_levels},
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -313,16 +457,30 @@ def fit_hierarchical_effects(
 ) -> ShrunkEffect:
     data = tuple(rows)
     if not data or prior_strength <= 0:
-        raise FittingError("Hierarchical effects require data and positive prior strength")
+        raise FittingError(
+            "Hierarchical effects require data and positive prior strength"
+        )
     global_effect = sum(float(row["effect"]) for row in data) / len(data)
     grouped: dict[str, list[float]] = {}
     for row in data:
         grouped.setdefault(str(row[group_key]), []).append(float(row["effect"]))
     effects = {
-        key: (len(values) * sum(values) / len(values) + prior_strength * global_effect) / (len(values) + prior_strength)
+        key: (len(values) * sum(values) / len(values) + prior_strength * global_effect)
+        / (len(values) + prior_strength)
         for key, values in grouped.items()
     }
-    return ShrunkEffect(effects, global_effect, PromotionDecision.CHANGE if any(value != global_effect for value in effects.values()) else PromotionDecision.KEEP, {"group_key": group_key, "prior_strength": prior_strength, "overlap_sensitivity": True})
+    return ShrunkEffect(
+        effects,
+        global_effect,
+        PromotionDecision.CHANGE
+        if any(value != global_effect for value in effects.values())
+        else PromotionDecision.KEEP,
+        {
+            "group_key": group_key,
+            "prior_strength": prior_strength,
+            "overlap_sensitivity": True,
+        },
+    )
 
 
 def fit_tool_effects(rows: Iterable[Mapping[str, Any]]) -> ShrunkEffect:
@@ -358,19 +516,45 @@ def fit_validator_effects(rows: Iterable[Mapping[str, Any]]) -> ValidatorEffectR
     data = tuple(rows)
     if not data:
         raise FittingError("Validator effects require data")
-    semantic_effect = _mean_difference(data, "semantic_validated", "semantic_unvalidated")
-    strict_effect = 0.0 if all(bool(row.get("strictness_changes_syntax_only")) for row in data) else _mean_difference(data, "strict_success", "prompted_success")
-    true_positive = sum(bool(row.get("validator_decision")) and bool(row.get("correct")) for row in data)
-    true_negative = sum(not bool(row.get("validator_decision")) and not bool(row.get("correct")) for row in data)
+    semantic_effect = _mean_difference(
+        data, "semantic_validated", "semantic_unvalidated"
+    )
+    strict_effect = (
+        0.0
+        if all(bool(row.get("strictness_changes_syntax_only")) for row in data)
+        else _mean_difference(data, "strict_success", "prompted_success")
+    )
+    true_positive = sum(
+        bool(row.get("validator_decision")) and bool(row.get("correct")) for row in data
+    )
+    true_negative = sum(
+        not bool(row.get("validator_decision")) and not bool(row.get("correct"))
+        for row in data
+    )
     positives = sum(bool(row.get("correct")) for row in data)
     negatives = len(data) - positives
     sensitivity = true_positive / positives if positives else 1.0
     specificity = true_negative / negatives if negatives else 1.0
-    false_rejections = sum(bool(row.get("correct")) and not bool(row.get("validator_decision")) for row in data)
+    false_rejections = sum(
+        bool(row.get("correct")) and not bool(row.get("validator_decision"))
+        for row in data
+    )
     false_rejection_cost = false_rejections / positives if positives else 0.0
     extraction = _mean_difference(data, "with_extraction", "without_extraction")
-    decision = PromotionDecision.CHANGE if abs(semantic_effect) > 0 and (sensitivity + specificity) / 2 >= 0.8 else PromotionDecision.ZERO
-    return ValidatorEffectResult(semantic_effect, strict_effect, sensitivity, specificity, false_rejection_cost, extraction, decision)
+    decision = (
+        PromotionDecision.CHANGE
+        if abs(semantic_effect) > 0 and (sensitivity + specificity) / 2 >= 0.8
+        else PromotionDecision.ZERO
+    )
+    return ValidatorEffectResult(
+        semantic_effect,
+        strict_effect,
+        sensitivity,
+        specificity,
+        false_rejection_cost,
+        extraction,
+        decision,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -390,14 +574,33 @@ def fit_retry_decay(rows: Iterable[Mapping[str, Any]]) -> RetryFitResult:
         grouped.setdefault(str(row.get("strategy", "same_prompt")), []).append(row)
     decay: dict[str, float] = {}
     for strategy, values in grouped.items():
-        first = max(1e-9, sum(float(row.get("unresolved_probability", 1.0)) for row in values if int(row.get("repeat_index", 0)) == 0) / max(1, sum(int(row.get("repeat_index", 0)) == 0 for row in values)))
-        later = sum(float(row.get("unresolved_probability", 1.0)) for row in values) / len(values)
+        first = max(
+            1e-9,
+            sum(
+                float(row.get("unresolved_probability", 1.0))
+                for row in values
+                if int(row.get("repeat_index", 0)) == 0
+            )
+            / max(1, sum(int(row.get("repeat_index", 0)) == 0 for row in values)),
+        )
+        later = sum(
+            float(row.get("unresolved_probability", 1.0)) for row in values
+        ) / len(values)
         decay[strategy] = max(0.0, min(1.0, 1 - later / first))
     floor = min(float(row.get("unresolved_probability", 1.0)) for row in data)
-    return RetryFitResult(floor, decay, True, PromotionDecision.CHANGE if any(value > 0 for value in decay.values()) else PromotionDecision.KEEP)
+    return RetryFitResult(
+        floor,
+        decay,
+        True,
+        PromotionDecision.CHANGE
+        if any(value > 0 for value in decay.values())
+        else PromotionDecision.KEEP,
+    )
 
 
-def validate_retry_sample(rows: Iterable[Mapping[str, Any]], *, minimum_first_attempt_failures: int = 100) -> None:
+def validate_retry_sample(
+    rows: Iterable[Mapping[str, Any]], *, minimum_first_attempt_failures: int = 100
+) -> None:
     failures = sum(
         int(row.get("repeat_index", 0)) == 0 and not bool(row.get("success", False))
         for row in rows
@@ -412,23 +615,89 @@ def fit_quality_critical_tilts(rows: Iterable[Mapping[str, Any]]) -> dict[str, A
     data = tuple(rows)
     successful = tuple(row for row in data if bool(row.get("success")))
     failures = tuple(row for row in data if not bool(row.get("success")))
-    quality = sum(float(row.get("quality_share", 0.0)) for row in successful) / len(successful) if successful else 0.0
-    critical = sum(float(row.get("critical_share", 0.0)) for row in failures) / len(failures) if failures else 0.0
+    quality = (
+        sum(float(row.get("quality_share", 0.0)) for row in successful)
+        / len(successful)
+        if successful
+        else 0.0
+    )
+    critical = (
+        sum(float(row.get("critical_share", 0.0)) for row in failures) / len(failures)
+        if failures
+        else 0.0
+    )
     nonlinear = quality > 0.95 or critical > 0.95
-    return {"quality_tilt": quality, "critical_tilt": critical, "decision": PromotionDecision.PROPOSE_SCHEMA.value if nonlinear else PromotionDecision.CHANGE.value, "fit_successes_only": True, "fit_failures_only": True}
+    return {
+        "quality_tilt": quality,
+        "critical_tilt": critical,
+        "decision": PromotionDecision.PROPOSE_SCHEMA.value
+        if nonlinear
+        else PromotionDecision.CHANGE.value,
+        "fit_successes_only": True,
+        "fit_failures_only": True,
+    }
 
 
-def _curve_probability(intercept: float, slopes: list[float], index: float, floor: float) -> float:
+def _curve_probability(
+    intercept: float,
+    slopes: list[float],
+    index: float,
+    difficulty: float,
+    tau: float,
+    floor: float,
+) -> float:
     latent = intercept
     remaining = max(0.0, index)
     for segment, slope in enumerate(slopes):
         width = 10.0 if segment < 5 else float("inf")
         distance = min(remaining, width)
-        latent += slope * distance / 10.0
+        latent += slope * distance
         remaining -= distance
         if remaining <= 0:
             break
-    return floor + (1 - floor) * _sigmoid(latent)
+    effective_tau = tau * _local_curve_slope(slopes, difficulty)
+    return (1 - floor) * _sigmoid((latent - difficulty) / effective_tau)
+
+
+def _local_curve_slope(slopes: Iterable[float], adjusted_point: float) -> float:
+    adjusted_lower = 0.0
+    for index, slope in enumerate(slopes):
+        raw_span = 10.0 if index < 5 else float("inf")
+        adjusted_upper = adjusted_lower + raw_span * slope
+        if adjusted_point <= adjusted_upper:
+            return max(slope, 0.0001)
+        adjusted_lower = adjusted_upper
+    return max(tuple(slopes)[-1], 0.0001)
+
+
+def _row_log_loss(
+    rows: Iterable[BernoulliRow],
+    intercept: float,
+    slopes: list[float],
+    ratios: TauRatios,
+    tau_scale: float,
+    floor: float,
+) -> float:
+    total = 0.0
+    count = 0
+    for row in rows:
+        base_tau = {
+            "soft": ratios.normal,
+            "normal": ratios.domain,
+            "sharp": ratios.reasoning,
+        }.get(row.tau_key, ratios.domain)
+        probability = _curve_probability(
+            intercept,
+            slopes,
+            row.intelligence_index,
+            row.difficulty or 0.0,
+            base_tau * tau_scale,
+            floor,
+        )
+        total -= float(row.success) * math.log(max(1e-12, probability))
+        total -= float(not row.success) * math.log(max(1e-12, 1 - probability))
+        count += 1
+    return total / max(count, 1)
 
 
 def _project_monotone(values: Iterable[float]) -> list[float]:
@@ -438,11 +707,16 @@ def _project_monotone(values: Iterable[float]) -> list[float]:
     return projected
 
 
-def _group_logit_effects(rows: Iterable[BernoulliRow], key, global_logit: float) -> dict[str, float]:
+def _group_logit_effects(
+    rows: Iterable[BernoulliRow], key, global_logit: float
+) -> dict[str, float]:
     grouped: dict[str, list[bool]] = {}
     for row in rows:
         grouped.setdefault(str(key(row)), []).append(row.success)
-    return {name: _logit(sum(values) / len(values)) - global_logit for name, values in grouped.items()}
+    return {
+        name: _logit(sum(values) / len(values)) - global_logit
+        for name, values in grouped.items()
+    }
 
 
 def _logit(probability: float) -> float:
@@ -462,7 +736,9 @@ def _as_probability(value: Any) -> float:
     return min(1 - 1e-9, max(1e-9, float(value)))
 
 
-def _probability_to_difficulty(base: float, treatment: float, tau: float, floor: float) -> float:
+def _probability_to_difficulty(
+    base: float, treatment: float, tau: float, floor: float
+) -> float:
     base_adjusted = (_as_probability(base) - floor) / max(1e-9, 1 - floor)
     treatment_adjusted = (_as_probability(treatment) - floor) / max(1e-9, 1 - floor)
     return tau * (_logit(base_adjusted) - _logit(treatment_adjusted))

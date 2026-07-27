@@ -61,8 +61,14 @@ class PreflightReport:
 
     def require_pass(self) -> None:
         if not self.passed:
-            failures = [check.get("message", "check failed") for check in self.checks if not check.get("passed")]
-            raise PreflightError("Preflight failed: " + "; ".join(str(item) for item in failures))
+            failures = [
+                check.get("message", "check failed")
+                for check in self.checks
+                if not check.get("passed")
+            ]
+            raise PreflightError(
+                "Preflight failed: " + "; ".join(str(item) for item in failures)
+            )
 
 
 class PreflightError(RuntimeError):
@@ -83,31 +89,65 @@ async def run_preflight(
     if settings is not None:
         try:
             settings.require_openrouter()
-            checks.append({"name": "credentials", "passed": True, "message": "API key is configured"})
+            checks.append(
+                {
+                    "name": "credentials",
+                    "passed": True,
+                    "message": "API key is configured",
+                }
+            )
         except Exception as error:
-            checks.append({"name": "credentials", "passed": False, "message": str(error)})
+            checks.append(
+                {"name": "credentials", "passed": False, "message": str(error)}
+            )
 
     dataset.prepare()
     cases = list(dataset.cases(manifest.dataset.split))
     if not cases:
-        checks.append({"name": "dataset", "passed": False, "message": "dataset produced no cases"})
+        checks.append(
+            {"name": "dataset", "passed": False, "message": "dataset produced no cases"}
+        )
     else:
-        checks.append({"name": "dataset", "passed": True, "message": f"validated {len(cases)} cases"})
+        checks.append(
+            {
+                "name": "dataset",
+                "passed": True,
+                "message": f"validated {len(cases)} cases",
+            }
+        )
 
-    requests = tuple(_request(manifest, dataset, case, condition, model) for model in manifest.models for case in cases for condition in manifest.conditions)
+    requests = tuple(
+        _request(manifest, dataset, case, condition, model)
+        for model in manifest.models
+        for case in cases
+        for condition in manifest.conditions
+    )
     compatibility_results = ()
     try:
         compatibility_results = validate_requests_against_catalog(requests, catalog)
-        checks.append({"name": "catalog_compatibility", "passed": True, "message": f"validated {len(compatibility_results)} request cells"})
+        checks.append(
+            {
+                "name": "catalog_compatibility",
+                "passed": True,
+                "message": f"validated {len(compatibility_results)} request cells",
+            }
+        )
     except CompatibilityError as error:
-        checks.append({"name": "catalog_compatibility", "passed": False, "message": str(error)})
+        checks.append(
+            {"name": "catalog_compatibility", "passed": False, "message": str(error)}
+        )
 
     repeats = manifest.generation.repeats
     transport_contingency = 1 + manifest.retries.transport_retries
     estimated_requests = len(requests) * repeats * transport_contingency
-    estimated_tokens = sum(
-        estimate_request_tokens(request) + request.max_output_tokens for request in requests
-    ) * repeats * transport_contingency
+    estimated_tokens = (
+        sum(
+            estimate_request_tokens(request) + request.max_output_tokens
+            for request in requests
+        )
+        * repeats
+        * transport_contingency
+    )
     estimated_cost = Decimal("0")
     for request, result in zip(requests, compatibility_results):
         try:
@@ -138,43 +178,109 @@ async def run_preflight(
             manifest.manifest_hash,
             estimated_cost,
         )
-        checks.append({
-            "name": "budget",
-            "passed": approved,
-            "message": "budget approval artifact accepted" if approved else "estimated spend exceeds budget and no valid approval artifact was found",
-        })
+        checks.append(
+            {
+                "name": "budget",
+                "passed": approved,
+                "message": "budget approval artifact accepted"
+                if approved
+                else "estimated spend exceeds budget and no valid approval artifact was found",
+            }
+        )
     else:
-        checks.append({"name": "budget", "passed": True, "message": "estimated spend is within budget"})
+        checks.append(
+            {
+                "name": "budget",
+                "passed": True,
+                "message": "estimated spend is within budget",
+            }
+        )
     if over_requests:
-        checks.append({"name": "request_budget", "passed": False, "message": "estimated requests exceed the configured request budget"})
+        checks.append(
+            {
+                "name": "request_budget",
+                "passed": False,
+                "message": "estimated requests exceed the configured request budget",
+            }
+        )
     else:
-        checks.append({"name": "request_budget", "passed": True, "message": "estimated requests are within budget"})
+        checks.append(
+            {
+                "name": "request_budget",
+                "passed": True,
+                "message": "estimated requests are within budget",
+            }
+        )
     if over_tokens:
-        checks.append({"name": "token_budget", "passed": False, "message": "estimated tokens exceed the configured token budget"})
+        checks.append(
+            {
+                "name": "token_budget",
+                "passed": False,
+                "message": "estimated tokens exceed the configured token budget",
+            }
+        )
     else:
-        checks.append({"name": "token_budget", "passed": True, "message": "estimated tokens are within budget"})
+        checks.append(
+            {
+                "name": "token_budget",
+                "passed": True,
+                "message": "estimated tokens are within budget",
+            }
+        )
 
     canary: dict[str, Any] = {"requested": run_canary, "passed": not run_canary}
     if run_canary:
         if canary_provider is None or not requests:
-            canary = {"requested": True, "passed": False, "message": "canary provider or request is unavailable"}
+            canary = {
+                "requested": True,
+                "passed": False,
+                "message": "canary provider or request is unavailable",
+            }
         else:
-            try:
-                canary_request = replace(
-                    requests[0], max_output_tokens=min(16, requests[0].max_output_tokens)
-                )
-                response = await canary_provider.complete(canary_request)
-                canary = {
-                    "requested": True,
-                    "passed": True,
-                    "response_id": response.response_id,
-                    "resolved_model": response.resolved_model,
-                }
-            except Exception as error:
-                canary = {"requested": True, "passed": False, "message": f"{type(error).__name__}: {error}"}
-        checks.append({"name": "canary", "passed": bool(canary.get("passed")), "message": str(canary.get("message", "canary completed"))})
+            first_by_model: dict[str, ProviderRequest] = {}
+            for request in requests:
+                first_by_model.setdefault(request.model_id, request)
+            results: list[dict[str, Any]] = []
+            for model_id, request in first_by_model.items():
+                try:
+                    canary_request = replace(
+                        request, max_output_tokens=min(16, request.max_output_tokens)
+                    )
+                    response = await canary_provider.complete(canary_request)
+                    results.append(
+                        {
+                            "model_id": model_id,
+                            "passed": True,
+                            "response_id": response.response_id,
+                            "resolved_model": response.resolved_model,
+                        }
+                    )
+                except Exception as error:
+                    results.append(
+                        {
+                            "model_id": model_id,
+                            "passed": False,
+                            "message": f"{type(error).__name__}: {error}",
+                        }
+                    )
+            canary = {
+                "requested": True,
+                "passed": all(result["passed"] for result in results),
+                "models": results,
+            }
+        checks.append(
+            {
+                "name": "canary",
+                "passed": bool(canary.get("passed")),
+                "message": str(canary.get("message", "canary completed")),
+            }
+        )
 
-    status = "pass" if all(check["passed"] for check in checks) and canary.get("passed", True) else "fail"
+    status = (
+        "pass"
+        if all(check["passed"] for check in checks) and canary.get("passed", True)
+        else "fail"
+    )
     return PreflightReport(
         status=status,
         manifest_hash=manifest.manifest_hash,

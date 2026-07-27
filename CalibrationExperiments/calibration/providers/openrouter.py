@@ -20,6 +20,7 @@ class OpenRouterProvider(ModelProvider):
 
     name = "openrouter"
     max_concurrency = 4
+    request_timeout_seconds = 120.0
 
     def __init__(
         self,
@@ -37,6 +38,7 @@ class OpenRouterProvider(ModelProvider):
         self.client = client or AsyncOpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=api_key,
+            timeout=self.request_timeout_seconds,
         )
         self.extra_headers = {
             key: value
@@ -57,6 +59,7 @@ class OpenRouterProvider(ModelProvider):
         settings: CalibrationSettings | None = None,
         *,
         catalog: CatalogSnapshot | None = None,
+        max_concurrency: int = 4,
     ) -> "OpenRouterProvider":
         config = settings or CalibrationSettings.from_environment()
         return cls(
@@ -64,6 +67,7 @@ class OpenRouterProvider(ModelProvider):
             http_referer=config.openrouter_http_referer,
             title=config.openrouter_title,
             catalog=catalog,
+            max_concurrency=max_concurrency,
         )
 
     async def complete(self, request: ProviderRequest) -> ProviderResponse:
@@ -86,15 +90,17 @@ class OpenRouterProvider(ModelProvider):
         if not isinstance(message, dict):
             message = _object_to_dict(message)
         content = message.get("content")
-        tool_calls = tuple(_object_to_dict(item) for item in message.get("tool_calls", ()))
+        tool_calls = tuple(
+            _object_to_dict(item) for item in (message.get("tool_calls") or ())
+        )
         refusal_value = message.get("refusal")
         usage = raw.get("usage") if isinstance(raw.get("usage"), dict) else {}
         usage = dict(usage)
         cached_tokens = _nested_int(usage, "prompt_tokens_details", "cached_tokens")
-        reasoning_tokens = _nested_int(usage, "completion_tokens_details", "reasoning_tokens")
-        reported_cost = _decimal_or_none(
-            usage.get("cost", raw.get("cost"))
+        reasoning_tokens = _nested_int(
+            usage, "completion_tokens_details", "reasoning_tokens"
         )
+        reported_cost = _decimal_or_none(usage.get("cost", raw.get("cost")))
         router_raw = raw.get("router_metadata") or raw.get("provider_metadata") or {}
         router = normalize_router_metadata(router_raw)
         resolved_model = raw.get("model") or router.get("resolved_model")
@@ -109,7 +115,9 @@ class OpenRouterProvider(ModelProvider):
                 )
             except KeyError:
                 catalog_model = self.catalog.model(request.model_id)
-            calculated_cost, breakdown = calculate_catalog_cost(catalog_model.pricing, usage)
+            calculated_cost, breakdown = calculate_catalog_cost(
+                catalog_model.pricing, usage
+            )
             cost_reconciliation = reconcile_cost(reported_cost, calculated_cost)
             cost_reconciliation["breakdown"] = breakdown.to_json()
         return ProviderResponse(
@@ -126,7 +134,9 @@ class OpenRouterProvider(ModelProvider):
             latency_ms=latency_ms,
             provider_cost=reported_cost,
             resolved_model=None if resolved_model is None else str(resolved_model),
-            resolved_provider=None if resolved_provider is None else str(resolved_provider),
+            resolved_provider=None
+            if resolved_provider is None
+            else str(resolved_provider),
             endpoint=None if endpoint is None else str(endpoint),
             content=content,
             router_metadata=router,

@@ -23,7 +23,9 @@ class CatalogError(RuntimeError):
 
 class CatalogHttpError(CatalogError):
     def __init__(self, status_code: int, message: str) -> None:
-        super().__init__(f"OpenRouter catalog request failed ({status_code}): {message}")
+        super().__init__(
+            f"OpenRouter catalog request failed ({status_code}): {message}"
+        )
         self.status_code = status_code
 
 
@@ -134,7 +136,9 @@ class CatalogSnapshot:
             for raw_model in page.get("data", []):
                 entry = normalize_model(raw_model)
                 if entry.id in seen:
-                    raise CatalogSchemaError(f"Duplicate model ID in catalog: {entry.id}")
+                    raise CatalogSchemaError(
+                        f"Duplicate model ID in catalog: {entry.id}"
+                    )
                 seen.add(entry.id)
                 models.append(entry)
         if not models:
@@ -146,7 +150,9 @@ class CatalogSnapshot:
             "raw_pages": list(pages),
         }
         snapshot_hash = _sha256_json(identity)
-        snapshot_id = f"{captured.replace(':', '').replace('+00:00', 'Z')}-{snapshot_hash[:16]}"
+        snapshot_id = (
+            f"{captured.replace(':', '').replace('+00:00', 'Z')}-{snapshot_hash[:16]}"
+        )
         snapshot = cls(
             snapshot_id=snapshot_id,
             captured_utc=captured,
@@ -216,17 +222,24 @@ class OpenRouterCatalogClient:
         self._page_size = page_size
         self._timeout = timeout_seconds
 
-    async def fetch_page(self, *, offset: int = 0, limit: int | None = None) -> dict[str, Any]:
+    async def fetch_page(
+        self, *, offset: int = 0, limit: int | None = None
+    ) -> dict[str, Any]:
         page_limit = limit or self._page_size
         params = {"offset": offset, "limit": page_limit}
-        headers = {"Authorization": f"Bearer {self._api_key}", "Accept": "application/json"}
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Accept": "application/json",
+        }
         client = self._http_client
         owns_client = client is None
         if client is None:
             client = httpx.AsyncClient(timeout=self._timeout)
         try:
             try:
-                response = await client.get(self._base_url, params=params, headers=headers)
+                response = await client.get(
+                    self._base_url, params=params, headers=headers
+                )
             except httpx.HTTPError as error:
                 raise CatalogHttpError(0, redact_text(str(error))) from error
         finally:
@@ -237,9 +250,13 @@ class OpenRouterCatalogClient:
         try:
             payload = response.json()
         except (ValueError, json.JSONDecodeError) as error:
-            raise CatalogSchemaError("OpenRouter catalog response was not valid JSON") from error
+            raise CatalogSchemaError(
+                "OpenRouter catalog response was not valid JSON"
+            ) from error
         if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
-            raise CatalogSchemaError("OpenRouter catalog response must contain a data array")
+            raise CatalogSchemaError(
+                "OpenRouter catalog response must contain a data array"
+            )
         return payload
 
     async def fetch_snapshot(self) -> CatalogSnapshot:
@@ -268,12 +285,24 @@ def normalize_model(raw: dict[str, Any]) -> ModelCatalogEntry:
         architecture.get("output_modalities", raw.get("output_modalities", ()))
     )
     modality = architecture.get("modality")
-    modalities = tuple(dict.fromkeys((*input_modalities, *output_modalities, *(_strings((modality,)) if modality else ()))))
+    modalities = tuple(
+        dict.fromkeys(
+            (
+                *input_modalities,
+                *output_modalities,
+                *(_strings((modality,)) if modality else ()),
+            )
+        )
+    )
     supported = _strings(raw.get("supported_parameters", ()))
     pricing_raw = raw.get("pricing") or {}
     if not isinstance(pricing_raw, dict):
         raise CatalogSchemaError(f"Invalid pricing for model {raw['id']}")
-    pricing = {str(key): _decimal_or_none(value) for key, value in pricing_raw.items()}
+    pricing = {
+        str(key): _decimal_or_none(value)
+        for key, value in pricing_raw.items()
+        if not isinstance(value, (dict, list))
+    }
     top_provider = raw.get("top_provider") or {}
     if not isinstance(top_provider, dict):
         raise CatalogSchemaError(f"Invalid top_provider for model {raw['id']}")
@@ -282,12 +311,18 @@ def normalize_model(raw: dict[str, Any]) -> ModelCatalogEntry:
         availability = True
     resolved = raw.get("resolved_model") or raw.get("version")
     canonical = raw.get("canonical_slug")
-    versioned = bool(raw.get("versioned", False) or resolved or _looks_versioned(str(canonical or raw["id"])))
+    versioned = bool(
+        raw.get("versioned", False)
+        or resolved
+        or _looks_versioned(str(canonical or raw["id"]))
+    )
     return ModelCatalogEntry(
         id=raw["id"],
         canonical_slug=None if canonical is None else str(canonical),
         created=_int_or_none(raw.get("created")),
-        expiration_date=_string_or_none(raw.get("expiration_date", raw.get("expiration"))),
+        expiration_date=_string_or_none(
+            raw.get("expiration_date", raw.get("expiration"))
+        ),
         context_length=_int_or_none(raw.get("context_length")),
         input_modalities=input_modalities,
         output_modalities=output_modalities,
@@ -310,7 +345,9 @@ def _decimal_or_none(value: Any) -> Decimal | None:
     except (InvalidOperation, ValueError) as error:
         raise CatalogSchemaError(f"Invalid decimal pricing value: {value!r}") from error
     if not decimal.is_finite() or decimal < 0:
-        raise CatalogSchemaError(f"Pricing must be a finite non-negative decimal: {value!r}")
+        raise CatalogSchemaError(
+            f"Pricing must be a finite non-negative decimal: {value!r}"
+        )
     return decimal
 
 
@@ -345,7 +382,9 @@ def _looks_versioned(value: str) -> bool:
 
 
 def _sha256_json(value: Any) -> str:
-    encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    encoded = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
 

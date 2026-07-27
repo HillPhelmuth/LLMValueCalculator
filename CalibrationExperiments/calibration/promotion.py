@@ -18,7 +18,8 @@ class PromotionError(ValueError):
 @dataclass(frozen=True, slots=True)
 class PromotionCriteria:
     min_sign_agreement: float = 0.8
-    min_held_out_improvement: float = 0.0
+    min_held_out_improvement: float = 0.02
+    min_held_out_brier_improvement: float = 0.01
     max_material_recommendation_fraction: float = 0.25
     require_no_duplication: bool = True
     required_approvals: int = 1
@@ -28,6 +29,10 @@ class PromotionCriteria:
             raise PromotionError("Sign-agreement threshold must be in [0, 1]")
         if self.min_held_out_improvement < 0:
             raise PromotionError("Held-out improvement threshold cannot be negative")
+        if self.min_held_out_brier_improvement < 0:
+            raise PromotionError(
+                "Held-out Brier improvement threshold cannot be negative"
+            )
         if not 0 <= self.max_material_recommendation_fraction <= 1:
             raise PromotionError("Material-change threshold must be in [0, 1]")
         if self.required_approvals < 1:
@@ -49,6 +54,7 @@ class PromotionEvidence:
     cost_usd: float = 0.0
     limitations: tuple[str, ...] = ()
     reviewers: tuple[dict[str, str], ...] = ()
+    held_out_brier_improvement: float = 0.0
 
     @classmethod
     def from_json(cls, value: Mapping[str, Any]) -> "PromotionEvidence":
@@ -62,14 +68,23 @@ class PromotionEvidence:
             sign_agreement=float(value["sign_agreement"]),
             held_out_improvement=float(value["held_out_improvement"]),
             duplicate_pathways=int(value.get("duplicate_pathways", 0)),
-            material_recommendation_fraction=float(value["material_recommendation_fraction"]),
+            material_recommendation_fraction=float(
+                value["material_recommendation_fraction"]
+            ),
             intervals=dict(value.get("intervals", {})),
-            calibration_cards=tuple(str(item) for item in value.get("calibration_cards", ())),
-            scenario_diff=None if value.get("scenario_diff") is None else str(value["scenario_diff"]),
+            calibration_cards=tuple(
+                str(item) for item in value.get("calibration_cards", ())
+            ),
+            scenario_diff=None
+            if value.get("scenario_diff") is None
+            else str(value["scenario_diff"]),
             provenance_ids=tuple(str(item) for item in value.get("provenance_ids", ())),
             cost_usd=float(value.get("cost_usd", 0.0)),
             limitations=tuple(str(item) for item in value.get("limitations", ())),
             reviewers=reviewers,
+            held_out_brier_improvement=float(
+                value.get("held_out_brier_improvement", 0.0)
+            ),
         )
 
     @classmethod
@@ -122,10 +137,20 @@ def check_promotion(
     approvals = _approved_reviewers(selected_evidence.reviewers)
     checks = {
         "immutable_candidate": bool(candidate_profile.profile_hash),
-        "sign_agreement": selected_evidence.sign_agreement >= selected.min_sign_agreement,
-        "no_duplication": (not selected.require_no_duplication) or selected_evidence.duplicate_pathways == 0,
-        "held_out_improvement": selected_evidence.held_out_improvement >= selected.min_held_out_improvement,
-        "material_recommendation_impact": selected_evidence.material_recommendation_fraction <= selected.max_material_recommendation_fraction,
+        "sign_agreement": selected_evidence.sign_agreement
+        >= selected.min_sign_agreement,
+        "no_duplication": (not selected.require_no_duplication)
+        or selected_evidence.duplicate_pathways == 0,
+        "held_out_improvement": selected_evidence.held_out_improvement
+        >= selected.min_held_out_improvement,
+        "held_out_brier_improvement": selected_evidence.held_out_brier_improvement
+        >= selected.min_held_out_brier_improvement,
+        "candidate_decision": candidate_profile.promotion_decisions.get(
+            "curve", "change"
+        )
+        == "change",
+        "material_recommendation_impact": selected_evidence.material_recommendation_fraction
+        <= selected.max_material_recommendation_fraction,
         "reviewer_approval": len(approvals) >= selected.required_approvals,
         "review_evidence": bool(
             selected_evidence.intervals
@@ -170,7 +195,10 @@ class PromotionStore:
         profile_path = profile.write_immutable(self.root / "profiles")
         generated: list[str] = []
         if application_directory is not None:
-            generated = [str(path) for path in write_application_artifacts(profile, application_directory)]
+            generated = [
+                str(path)
+                for path in write_application_artifacts(profile, application_directory)
+            ]
         index = self._read_index()
         event = {
             "event": "promote",
@@ -187,7 +215,9 @@ class PromotionStore:
         return {"check": check.to_json(), "event": event, "index": index}
 
     def rollback(self, profile_hash: str) -> dict[str, Any]:
-        profile_path = next(self.root.glob(f"profiles/*/{profile_hash}/profile.json"), None)
+        profile_path = next(
+            self.root.glob(f"profiles/*/{profile_hash}/profile.json"), None
+        )
         if profile_path is None:
             raise PromotionError(f"No immutable profile exists for hash {profile_hash}")
         profile = CalibrationProfile.load(profile_path)
@@ -209,14 +239,21 @@ class PromotionStore:
 
     def _read_index(self) -> dict[str, Any]:
         if not self.index_path.exists():
-            return {"schema_version": 1, "active_profile_hash": None, "active_profile_path": None, "history": []}
+            return {
+                "schema_version": 1,
+                "active_profile_hash": None,
+                "active_profile_path": None,
+                "history": [],
+            }
         value = json.loads(self.index_path.read_text(encoding="utf-8"))
         if not isinstance(value, dict) or not isinstance(value.get("history"), list):
             raise PromotionError("Promotion index is malformed")
         return value
 
     def _write_index(self, value: dict[str, Any]) -> None:
-        descriptor, temporary_name = tempfile.mkstemp(dir=self.root, prefix=".index.", suffix=".tmp")
+        descriptor, temporary_name = tempfile.mkstemp(
+            dir=self.root, prefix=".index.", suffix=".tmp"
+        )
         try:
             with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
                 json.dump(value, stream, sort_keys=True, indent=2)
@@ -237,7 +274,9 @@ def _profile(value: str | Path | CalibrationProfile) -> CalibrationProfile:
         raise PromotionError(f"Invalid profile: {value}") from error
 
 
-def _evidence(value: str | Path | Mapping[str, Any] | PromotionEvidence) -> PromotionEvidence:
+def _evidence(
+    value: str | Path | Mapping[str, Any] | PromotionEvidence,
+) -> PromotionEvidence:
     if isinstance(value, PromotionEvidence):
         return value
     if isinstance(value, (str, Path)):

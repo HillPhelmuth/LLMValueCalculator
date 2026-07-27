@@ -179,6 +179,11 @@ Prefer deterministic scorers in this order:
 
 An LLM judge must never be the only scorer used to fit the intelligence curve. If a judge is necessary for summaries or free text, validate its threshold and error rate against SummEval, FRANK, or a manually scored calibration subset and propagate judge uncertainty into the coefficient interval.
 
+Experiment 1's `deepseek/deepseek-v4-flash` rescore is a reviewer-directed
+exception to that default policy. Its candidate must remain explicitly labeled
+`unvalidated-by-policy` and `blind-model-identity` self-judged, retain abstention
+sensitivity analyses, and cannot be promoted without separate reviewer approval.
+
 ### Fitting and profile generation
 
 The shared single-attempt model should be fitted directly:
@@ -261,6 +266,32 @@ Avoid fitting to the exact component scores used by Artificial Analysis when pos
 * Otherwise update the six `IntelligenceCurveConfig.Default` slopes to the median fitted slopes, rounded to one decimal only after prediction is evaluated.
 * Update `TauBySensitivity\[Normal]` to the fitted normal tau. Preserve the current soft/normal/sharp ratios (`8:5:3`) initially, scaling Soft and Sharp from the new Normal value. Fit three independent tau values only if product testing establishes distinct, observable meanings for the three UI selections.
 * Estimate `BaseErrorFloorRate` provisionally from repeated easy cases, but do not publish it until experiment 7 confirms retry persistence.
+
+### Results: v4 LLM-as-judge rescore (reviewed 2026-07-27)
+
+All 20,000 main and 12,000 repeat judgments were recovered to schema-valid
+outputs. The locked v4 fit returns **`keep`**: neither a revised capability curve
+nor revised tau values had the required independent support across the complete
+model and dataset holdouts. The decision is unchanged when abstentions are
+treated as incorrect or correct. The selected slopes therefore remain
+`1.0, 1.4, 1.8, 2.2, 2.6, 3.0`, the soft/normal/sharp tau values remain `8:5:3`,
+and the active error floor remains `0.01`; repeat persistence (`0.284`) is
+provisional and is not used to change the profile.
+
+The judge was also compared, outside the curve fit, with 200 public
+[NVIDIA Judge's Verdict](https://huggingface.co/datasets/nvidia/judges-verdict)
+examples scored independently by three people. Against a strict definition of a
+human-correct response, it agreed on 84.5% of examples (82.9% sensitivity and
+85.5% specificity). Against an inclusive definition that credits partly-correct
+responses, it agreed on 83.5% (72.2% sensitivity and 96.7% specificity). Both
+interpretations miss the pre-registered 90% sensitivity/specificity validation
+thresholds. This human comparison is limited to TechQA RAG/agentic responses,
+but it confirms that the judge must remain `unvalidated-by-policy` and cannot
+support a promoted calibration change by itself.
+
+The completed evidence is under `judge-fitting-v4`, `judge-fit-v4`, and
+`judge-v4/human-validation`. The outcome for the application is deliberately
+conservative: no production calibration is changed.
 
 ## Experiment 2: Context and retrieval
 

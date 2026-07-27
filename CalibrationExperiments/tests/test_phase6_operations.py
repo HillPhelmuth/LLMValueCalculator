@@ -75,6 +75,69 @@ class Phase6OperationsTests(unittest.TestCase):
                 self.assertFalse(store.cancellation_requested(run_id))
                 self.assertEqual(1, store.queue_counts(run_id)["pending"])
 
+    def test_recorded_attempt_reconciles_a_stale_work_item(self) -> None:
+        manifest = load_manifest(ROOT / "manifests/pr-smoke.yaml")
+        with tempfile.TemporaryDirectory() as directory:
+            with SqliteRunStore(Path(directory) / "runs.sqlite3") as store:
+                resolved = manifest.resolved(("pr-001",))
+                run_id = store.create_run(manifest, "phase6-test", resolved_manifest=resolved)
+                request_hash = "a" * 64
+                work_item = store.create_work_item(run_id, request_hash)
+                self.assertEqual(work_item, store.claim_work_item(run_id, "owner"))
+                store._connection.execute(
+                    """
+                    INSERT INTO attempts (
+                        schema_version, attempt_id, run_id, case_id, condition_id,
+                        model_id, model_version, provider, prompt_version, repeat_index,
+                        request_hash, raw_request_uri, raw_response_uri, latency_ms,
+                        token_counts_json, tool_calls_json, finish_reason, refusal,
+                        response_id, from_cache, created_utc
+                    ) VALUES ('1.0', 'attempt-1', ?, 'case-1', 'baseline',
+                        'fake-1', 'fake/echo-v1', 'fake', 'test-v1', 0, ?,
+                        'objects/request.json', 'objects/response.json', 1.0,
+                        '{}', '[]', 'stop', 0, 'response-1', 0, '2026-01-01T00:00:00+00:00')
+                    """,
+                    (run_id, request_hash),
+                )
+                store._connection.commit()
+                self.assertTrue(
+                    store.reconcile_completed_work_item(work_item, run_id, request_hash)
+                )
+                self.assertTrue(store.has_recorded_attempt(run_id, request_hash))
+                self.assertEqual(1, store.queue_counts(run_id)["completed"])
+
+    def test_bulk_reconciliation_only_closes_rows_with_recorded_attempts(self) -> None:
+        manifest = load_manifest(ROOT / "manifests/pr-smoke.yaml")
+        with tempfile.TemporaryDirectory() as directory:
+            with SqliteRunStore(Path(directory) / "runs.sqlite3") as store:
+                resolved = manifest.resolved(("pr-001",))
+                run_id = store.create_run(manifest, "phase6-test", resolved_manifest=resolved)
+                recorded_hash = "b" * 64
+                missing_hash = "c" * 64
+                store.create_work_item(run_id, recorded_hash)
+                store.create_work_item(run_id, missing_hash)
+                store._connection.execute(
+                    """
+                    INSERT INTO attempts (
+                        schema_version, attempt_id, run_id, case_id, condition_id,
+                        model_id, model_version, provider, prompt_version, repeat_index,
+                        request_hash, raw_request_uri, raw_response_uri, latency_ms,
+                        token_counts_json, tool_calls_json, finish_reason, refusal,
+                        response_id, from_cache, created_utc
+                    ) VALUES ('1.0', 'attempt-2', ?, 'case-1', 'baseline',
+                        'fake-1', 'fake/echo-v1', 'fake', 'test-v1', 0, ?,
+                        'objects/request.json', 'objects/response.json', 1.0,
+                        '{}', '[]', 'stop', 0, 'response-2', 0, '2026-01-01T00:00:00+00:00')
+                    """,
+                    (run_id, recorded_hash),
+                )
+                store._connection.commit()
+                self.assertEqual(1, store.reconcile_recorded_work_items(run_id))
+                self.assertEqual(
+                    {"pending": 1, "leased": 0, "completed": 1, "failed": 0},
+                    store.queue_counts(run_id),
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

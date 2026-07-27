@@ -135,7 +135,7 @@ def build_judge_request(
         provider="openrouter",
         messages=messages,
         temperature=0.0,
-        max_output_tokens=32,
+        max_output_tokens=128,
         reasoning_effort=None,
         condition_id="judge",
         prompt_version=config.prompt_version,
