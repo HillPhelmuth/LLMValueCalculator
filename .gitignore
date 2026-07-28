@@ -471,3 +471,4 @@ FodyWeavers.xsd
 /CalibrationExperiments/.ci-coverage.xml
 /CalibrationExperiments/*.egg-info/
 /CalibrationExperiments/.calibration-runs
+/.github/workflows/calibration-nightly.yml
