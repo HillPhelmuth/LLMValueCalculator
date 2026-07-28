@@ -472,3 +472,8 @@ FodyWeavers.xsd
 /CalibrationExperiments/*.egg-info/
 /CalibrationExperiments/.calibration-runs
 /.github/workflows/calibration-nightly.yml
+/AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer/obj/Debug/net10.0/AAInteractiveValueAnalyzer.GeneratedMSBuildEditorConfig.editorconfig
+/AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/obj/Debug/net10.0/AAInteractiveValueAnalyzer.Client.assets.cache
+/AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/obj/AAInteractiveValueAnalyzer.Client.csproj.nuget.dgspec.json
+/AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/obj/project.assets.json
+/AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/obj/project.nuget.cache
