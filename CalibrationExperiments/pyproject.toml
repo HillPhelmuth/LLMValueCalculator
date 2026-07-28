@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-value-calibration"
+version = "0.1.0"
+description = "Reproducible calibration experiment harness for LLM Value Calculator"
+requires-python = "==3.12.*"
+dependencies = [
+    "pydantic==2.12.2",
+    "PyYAML==6.0.2",
+    "jsonschema==4.24.0",
+    "pyarrow==19.0.1",
+    "openai==1.86.0",
+    "httpx==0.28.1",
+    "numpy==2.2.3",
+    "scipy==1.15.2",
+]
+
+[dependency-groups]
+dev = [
+    "pip-audit==2.9.0",
+    "pip-licenses==5.0.0",
+    "coverage==7.6.12",
+    "pyright==1.1.405",
+    "pytest==8.4.2",
+    "ruff==0.13.0",
+]
+
+[tool.uv]
+required-version = ">=0.8.0"
+default-groups = ["dev"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[project.scripts]
+llm-value-calibration = "calibration.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["calibration*"]

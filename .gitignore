@@ -460,3 +460,15 @@ FodyWeavers.xsd
 /AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/obj/Debug/net10.0/scopedcss/Pages/Analyzer.razor.rz.scp.css
 /.Generated_Files
 /sketches
+
+# Calibration harness local environments and run outputs
+/CalibrationExperiments/.venv/
+/CalibrationExperiments/.ruff_cache/
+/CalibrationExperiments/.calibration-runs/
+/CalibrationExperiments/.ci-runs/
+/CalibrationExperiments/.nightly-runs/
+/CalibrationExperiments/.full-runs/
+/CalibrationExperiments/.ci-coverage.xml
+/CalibrationExperiments/*.egg-info/
+/CalibrationExperiments/.calibration-runs
+/.github/workflows/calibration-nightly.yml

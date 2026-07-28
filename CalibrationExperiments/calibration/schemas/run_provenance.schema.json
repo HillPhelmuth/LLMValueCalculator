@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "calibration/provenance/1.0",
+  "type": "object",
+  "required": ["schema_version", "provenance_id", "code_commit", "manifest_hash", "dependency_lock_hash", "dataset_revisions", "prompt_hashes", "model_snapshot_hash", "scorer_versions", "container_digests", "environment"],
+  "properties": {"schema_version": {"const": "1.0"}, "provenance_id": {"type": "string", "minLength": 64}, "code_commit": {"type": "string"}, "manifest_hash": {"type": "string", "minLength": 64}, "dependency_lock_hash": {"type": "string"}, "dataset_revisions": {"type": "array", "items": {"type": "string"}}, "prompt_hashes": {"type": "array", "items": {"type": "string"}}, "model_snapshot_hash": {"type": "string", "minLength": 64}, "scorer_versions": {"type": "object"}, "container_digests": {"type": "array", "items": {"type": "string"}}, "catalog_snapshot_hash": {"type": ["string", "null"]}, "environment": {"type": "object"}},
+  "additionalProperties": false
+}

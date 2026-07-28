@@ -1,0 +1,19 @@
+datasets:
+  # Add a reviewed public dataset revision here before using it in a run.
+  # Revisions are content hashes; labels_available must be false for public
+  # test sets whose labels are not released.
+  - dataset_id: smoke-jsonl
+    adapter: jsonl
+    adapter_version: jsonl-1.0.0
+    source_url: https://example.invalid/smoke-jsonl
+    license: CC0-1.0
+    revision: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    file_name: cases.jsonl
+    splits: [validation]
+    labels_available: true
+    terms_url: https://creativecommons.org/publicdomain/zero/1.0/
+    notes: Synthetic repository fixture; external sources require a new license and terms review.
+    metadata:
+      data_class: synthetic_smoke
+      terms_review: approved-for-synthetic-fixture
+      permitted_use: true

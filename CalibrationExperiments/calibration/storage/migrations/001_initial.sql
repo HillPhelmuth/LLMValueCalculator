@@ -1,0 +1,3 @@
+-- Version 1: runs, attempts, scores, case_features, and response_cache.
+-- The executable DDL is kept in SqliteRunStore so empty databases and
+-- upgrades use the same transaction and explicit column lists.

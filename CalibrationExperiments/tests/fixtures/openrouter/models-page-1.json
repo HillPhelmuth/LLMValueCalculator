@@ -1,0 +1,16 @@
+{
+  "data": [
+    {
+      "id": "provider/model-2026-02",
+      "canonical_slug": "provider/model-2026-02",
+      "created": 1769904000,
+      "expiration_date": null,
+      "context_length": 16384,
+      "architecture": {"modality": "text->text"},
+      "supported_parameters": ["temperature"],
+      "pricing": {"prompt": "0", "completion": "0"},
+      "top_provider": {"context_length": 16384, "max_completion_tokens": 8192},
+      "versioned": true
+    }
+  ]
+}

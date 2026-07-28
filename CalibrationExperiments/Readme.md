@@ -76,6 +76,7 @@ dataset:
   sample_seed: 1847
 models:
   - catalog_id: <stable-model-id>
+    provider: <provider-adapter-name>
     provider_model: <dated-provider-model-id>
     aa_snapshot: 2026-07-01
 generation:
@@ -83,6 +84,7 @@ generation:
   max_output_tokens: 512
   reasoning_effort: medium
   repeats: 1
+prompt_version: context-rag-v1
 conditions:
   - no_context
   - oracle_context
@@ -177,6 +179,11 @@ Prefer deterministic scorers in this order:
 
 An LLM judge must never be the only scorer used to fit the intelligence curve. If a judge is necessary for summaries or free text, validate its threshold and error rate against SummEval, FRANK, or a manually scored calibration subset and propagate judge uncertainty into the coefficient interval.
 
+Experiment 1's `deepseek/deepseek-v4-flash` rescore is a reviewer-directed
+exception to that default policy. Its candidate must remain explicitly labeled
+`unvalidated-by-policy` and `blind-model-identity` self-judged, retain abstention
+sensitivity analyses, and cannot be promoted without separate reviewer approval.
+
 ### Fitting and profile generation
 
 The shared single-attempt model should be fitted directly:
@@ -259,6 +266,32 @@ Avoid fitting to the exact component scores used by Artificial Analysis when pos
 * Otherwise update the six `IntelligenceCurveConfig.Default` slopes to the median fitted slopes, rounded to one decimal only after prediction is evaluated.
 * Update `TauBySensitivity\[Normal]` to the fitted normal tau. Preserve the current soft/normal/sharp ratios (`8:5:3`) initially, scaling Soft and Sharp from the new Normal value. Fit three independent tau values only if product testing establishes distinct, observable meanings for the three UI selections.
 * Estimate `BaseErrorFloorRate` provisionally from repeated easy cases, but do not publish it until experiment 7 confirms retry persistence.
+
+### Results: v4 LLM-as-judge rescore (reviewed 2026-07-27)
+
+All 20,000 main and 12,000 repeat judgments were recovered to schema-valid
+outputs. The locked v4 fit returns **`keep`**: neither a revised capability curve
+nor revised tau values had the required independent support across the complete
+model and dataset holdouts. The decision is unchanged when abstentions are
+treated as incorrect or correct. The selected slopes therefore remain
+`1.0, 1.4, 1.8, 2.2, 2.6, 3.0`, the soft/normal/sharp tau values remain `8:5:3`,
+and the active error floor remains `0.01`; repeat persistence (`0.284`) is
+provisional and is not used to change the profile.
+
+The judge was also compared, outside the curve fit, with 200 public
+[NVIDIA Judge's Verdict](https://huggingface.co/datasets/nvidia/judges-verdict)
+examples scored independently by three people. Against a strict definition of a
+human-correct response, it agreed on 84.5% of examples (82.9% sensitivity and
+85.5% specificity). Against an inclusive definition that credits partly-correct
+responses, it agreed on 83.5% (72.2% sensitivity and 96.7% specificity). Both
+interpretations miss the pre-registered 90% sensitivity/specificity validation
+thresholds. This human comparison is limited to TechQA RAG/agentic responses,
+but it confirms that the judge must remain `unvalidated-by-policy` and cannot
+support a promoted calibration change by itself.
+
+The completed evidence is under `judge-fitting-v4`, `judge-fit-v4`, and
+`judge-v4/human-validation`. The outcome for the application is deliberately
+conservative: no production calibration is changed.
 
 ## Experiment 2: Context and retrieval
 
@@ -497,3 +530,70 @@ If evidence is inconclusive, retain the current prior and label its interval. If
 
 This order prevents risk controls, retries, or partial-value logic from distorting the intelligence curve fit.
 
+## Harness implementation status
+
+The first implementation slice lives in this folder and covers the shared core needed before experiment-specific integrations:
+
+- strict YAML manifest validation and canonical SHA-256 manifest hashes;
+- a provider-neutral request and response contract;
+- dataset and scorer adapter contracts;
+- a hash-verified JSONL dataset adapter;
+- normalized SQLite run, attempt, score, case-feature, and response-cache tables;
+- content-addressed, atomic raw request and response storage;
+- bounded asynchronous execution, provider concurrency limits, rate-limit hooks, transport retries, caching, and resumability;
+- normalized exact-match and token-F1 scorers; and
+- a credential-free fake provider and smoke manifest that exercise the complete path.
+
+Run the tests from `CalibrationExperiments`:
+
+```bash
+PYTHONPATH=. python -m unittest discover -s tests -v
+```
+
+Run the smoke experiment:
+
+```bash
+PYTHONPATH=. python -m calibration run manifests/smoke.yaml
+```
+
+Run state is written to `.calibration-runs/runs.sqlite3`. Raw and normalized provider artifacts are stored by content hash under `.calibration-runs/objects`. Use `--resume-run-id <id>` to continue an interrupted run without executing completed work items again.
+
+The foundation also provides:
+
+- Python 3.12.x pinned in `pyproject.toml` and a checked-in `uv.lock`; `uv sync --locked` creates the clean environment.
+- JSON Schema 2020-12 records under `calibration/schemas/` for manifests, runs, work items, attempts, scores, case features, model snapshots, fitted estimates, profiles, provenance, and artifact metadata.
+- Resolved manifests with explicit sample IDs, prompt/scorer locks, condition hashes, routing, budgets, holdouts, retries, container digests, fitting seed, and a second resolved-manifest hash saved with each run.
+- Environment-only `OPENROUTER_API_KEY` handling and recursive redaction for headers, URLs, nested payloads, artifacts, and errors. Credentials are never part of a manifest or database record.
+- Versioned SQLite migrations, lifecycle states (`created`, `running`, `pausing`, `completed`, `failed`, `cancelled`), lease recovery, unique logical attempts, foreign-keyed scores, model snapshots, fitted-estimate lineage, and run provenance.
+- Atomic content-addressed artifacts with metadata sidecars and SHA-256 readback checks. `llm-value-calibration audit <run-id>` audits both lineage and artifacts.
+- Deterministic immutable Parquet snapshots for normalized runs, attempts, scores, case features, model snapshots, and fitted estimates.
+
+Useful locked commands:
+
+```bash
+uv sync --locked
+uv run --locked python -m unittest discover -s tests -v
+uv run --locked python -m calibration run manifests/smoke.yaml
+uv run --locked python -m calibration export <run-id>
+uv run --locked python -m calibration audit <run-id>
+uv run --locked pip-audit
+uv run --locked pip-licenses --format=markdown --with-urls --with-authors
+```
+
+Phase 2 adds the OpenRouter model and inference layer:
+
+- `OpenRouterCatalogClient` fetches the authenticated paginated `/api/v1/models` catalog, preserves raw pages, normalizes Decimal pricing and provider limits, and writes timestamped immutable snapshots.
+- `ArtificialAnalysisSnapshot` and `select_model_panel()` enforce one-to-one dated model mappings, preserve source citations and index fields, balance Experiment 1 intelligence bands, and persist selection/exclusion reasons.
+- `OpenRouterProvider` uses `AsyncOpenAI(base_url="https://openrouter.ai/api/v1")`, supports tools, tool choice, response formats, reasoning, routing, optional attribution headers, and normalized nullable usage/cost/routing metadata.
+- Compatibility checks run against the frozen catalog before queue creation. Routing locks are translated to OpenRouter's `provider` object with fitted-run fallbacks disabled.
+- Retry classification honors retryable status codes and `Retry-After`, records transport events separately from experimental repeats, and enforces request/token budgets.
+- `preflight` produces a machine-readable credential, catalog, capability, canary, and spend report and requires an approval artifact when the resolved estimate exceeds budget.
+
+Example preflight command:
+
+```bash
+uv run --locked python -m calibration preflight manifests/smoke.yaml \
+  --catalog path/to/catalog-snapshot.json --output preflight.json
+```
+
+The next implementation slice should add the dataset, prompt, perturbation, and scoring platform for the experiment-specific benchmarks.

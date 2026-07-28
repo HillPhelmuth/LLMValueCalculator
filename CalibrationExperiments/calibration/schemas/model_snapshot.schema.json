@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "calibration/model-snapshot/1.0",
+  "type": "object",
+  "required": ["schema_version", "snapshot_id", "catalog_id", "provider_model", "snapshot_hash"],
+  "properties": {"schema_version": {"const": "1.0"}, "snapshot_id": {"type": "string"}, "run_id": {"type": "string"}, "catalog_id": {"type": "string"}, "provider": {"type": "string"}, "provider_model": {"type": "string"}, "aa_snapshot": {"type": "string"}, "aa_intelligence_index": {"type": ["number", "null"]}, "snapshot_hash": {"type": "string", "minLength": 64}, "catalog_json": {"type": "object"}},
+  "additionalProperties": false
+}

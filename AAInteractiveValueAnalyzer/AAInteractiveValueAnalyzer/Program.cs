@@ -2,6 +2,7 @@ using System.Text.Json;
 using AAInteractiveValueAnalyzer.Client.Pages;
 using AAInteractiveValueAnalyzer.Components;
 using AAInteractiveValueAnalyzer.Models;
+using AAInteractiveValueAnalyzer.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,6 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveWebAssemblyComponents();
 builder.Services.AddHttpClient();
+builder.Services.AddSingleton<CalibrationProfileStore>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -31,6 +33,23 @@ app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveWebAssemblyRenderMode()
     .AddAdditionalAssemblies(typeof(AAInteractiveValueAnalyzer.Client._Imports).Assembly);
+app.MapGet("api/calibration-profile", async (HttpRequest request, HttpResponse response, CalibrationProfileStore profiles, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var active = await profiles.ReadActiveAsync(cancellationToken);
+        var etag = $"\"{active.Hash}\"";
+        response.Headers.ETag = etag;
+        response.Headers.CacheControl = "no-cache";
+        if (request.Headers.IfNoneMatch.Any(value => StringComparer.Ordinal.Equals(value, etag)))
+            return Results.StatusCode(StatusCodes.Status304NotModified);
+        return Results.Text(active.Json, "application/json");
+    }
+    catch (Exception error) when (error is IOException or JsonException or InvalidOperationException)
+    {
+        return Results.Problem("No valid active calibration profile is available.", statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
 var apiKey = builder.Configuration["ArtificialAnalysis:ApiKey"];
 app.MapGet("api/models", async () =>
 {

@@ -1,0 +1,7 @@
+{
+  "schema_version": "1.0",
+  "attempt_id": "attempt-1",
+  "scorer_name": "answer_exact_match",
+  "scorer_version": "1.0.0",
+  "unknown": true
+}

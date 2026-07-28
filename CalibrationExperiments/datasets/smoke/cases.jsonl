@@ -1,0 +1,4 @@
+{"case_id":"echo-001","prompt":"Kansas City","expected":"Kansas City","split":"validation","metadata":{"category":"classification","base_difficulty_stratum":"smoke","verifiability_band":"deterministic","output_band":"free_text"}}
+{"case_id":"echo-002","prompt":"Artificial Analysis","expected":"Artificial Analysis","split":"validation","metadata":{"category":"classification","base_difficulty_stratum":"smoke","verifiability_band":"deterministic","output_band":"free_text"}}
+{"case_id":"echo-003","prompt":"Convex calibration","expected":"Convex calibration","split":"validation","metadata":{"category":"classification","base_difficulty_stratum":"smoke","verifiability_band":"deterministic","output_band":"free_text"}}
+

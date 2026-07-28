@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "calibration/transport-event/1.0",
+  "type": "object",
+  "required": ["schema_version", "event_id", "run_id", "request_hash", "provider", "transport_attempt", "event_type", "created_utc"],
+  "properties": {"schema_version": {"const": "1.0"}, "event_id": {"type": "string"}, "run_id": {"type": "string"}, "request_hash": {"type": "string"}, "provider": {"type": "string"}, "transport_attempt": {"type": "integer", "minimum": 0}, "event_type": {"type": "string"}, "status_code": {"type": ["integer", "null"]}, "retry_after_seconds": {"type": ["number", "null"]}, "delay_seconds": {"type": ["number", "null"]}, "error_type": {"type": ["string", "null"]}, "error_message": {"type": ["string", "null"]}, "created_utc": {"type": "string"}},
+  "additionalProperties": false
+}

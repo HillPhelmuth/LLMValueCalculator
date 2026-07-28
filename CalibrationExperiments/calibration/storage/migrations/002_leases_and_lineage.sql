@@ -1,0 +1,2 @@
+-- Version 2: run_provenance, model_snapshots, work_items, and fitted_estimates.
+-- See SqliteRunStore._apply_lease_and_lineage_schema for the transactional DDL.

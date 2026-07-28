@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "calibration/model-panel/1.0",
+  "type": "object",
+  "required": ["schema_version", "panel_id", "catalog_snapshot_hash", "aa_snapshot_hash", "selected", "decisions", "panel_hash"],
+  "properties": {"schema_version": {"const": "1.0"}, "panel_id": {"type": "string"}, "catalog_snapshot_hash": {"type": "string", "minLength": 64}, "aa_snapshot_hash": {"type": "string", "minLength": 64}, "selected": {"type": "array", "items": {"type": "object"}}, "decisions": {"type": "array", "items": {"type": "object"}}, "panel_hash": {"type": "string", "minLength": 64}},
+  "additionalProperties": false
+}

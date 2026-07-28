@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "calibration/case-features/1.0",
+  "type": "object",
+  "required": ["schema_version", "case_id", "dataset_id", "dataset_revision", "split", "feature_json"],
+  "properties": {"schema_version": {"const": "1.0"}, "case_id": {"type": "string"}, "dataset_id": {"type": "string"}, "dataset_revision": {"type": "string"}, "split": {"type": "string"}, "category": {"type": ["string", "null"]}, "base_difficulty_stratum": {"type": ["string", "null"]}, "context_band": {"type": ["string", "null"]}, "reasoning_depth": {"type": ["string", "null"]}, "domain_band": {"type": ["string", "null"]}, "tool_horizon": {"type": ["string", "null"]}, "verifiability_band": {"type": ["string", "null"]}, "output_band": {"type": ["string", "null"]}, "criticality_band": {"type": ["string", "null"]}, "feature_json": {"type": "object"}},
+  "additionalProperties": false
+}

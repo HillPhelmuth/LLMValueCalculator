@@ -1,0 +1,10 @@
+{
+  "image": "calibration-sandbox",
+  "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "scan_report_hash": "recorded-sandbox-scan-phase6",
+  "critical_vulnerabilities": 0,
+  "high_vulnerabilities": 0,
+  "network_disabled": true,
+  "privileged": false,
+  "read_only_root": true
+}

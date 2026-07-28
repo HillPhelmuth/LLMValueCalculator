@@ -14,8 +14,26 @@ namespace AAInteractiveValueAnalyzer.Client.Services;
 /// the ones to fit first, are <see cref="TauBySensitivity"/>, the difficulty modifiers, and the
 /// category baselines.
 /// </remarks>
-public class RecommendationEngine(ModelCatalog modelCatalog)
+public class RecommendationEngine
 {
+    private readonly ModelCatalog modelCatalog;
+    private readonly CalibrationProfileProvider? profileProvider;
+    private readonly CalibrationProfile? fixedProfile;
+
+    public RecommendationEngine(ModelCatalog modelCatalog, CalibrationProfileProvider profileProvider)
+    {
+        this.modelCatalog = modelCatalog;
+        this.profileProvider = profileProvider;
+    }
+
+    public RecommendationEngine(ModelCatalog modelCatalog, CalibrationProfile profile)
+    {
+        this.modelCatalog = modelCatalog;
+        fixedProfile = profile;
+        fixedProfile.Validate();
+    }
+
+    public CalibrationProfile ActiveProfile => fixedProfile ?? CalibrationProfile.Baseline;
     /// <summary>
     /// The analysis is normalized around task batches of this size when estimating cost, value, and throughput.
     /// </summary>
@@ -373,6 +391,7 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
     /// <returns>A summary containing difficulty factors, guardrails, and ranked model recommendations.</returns>
     public async Task<AnalysisSummary> Analyze(UseCaseInputs inputs)
     {
+        var calibrationProfile = fixedProfile ?? await profileProvider!.GetActiveAsync();
         var difficultyFactors = new List<string>();
         var guardrailFactors = new List<string>();
         var categoryProfile = ResolveTaskCategoryProfile(inputs.TaskCategory);
@@ -394,35 +413,36 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
 
         if (inputs.HasSilentFailureRisk)
         {
-            guardrailFactors.Add($"Silent-failure risk multiplies the critical share of failures by {SilentFailureCriticalShareMultiplier:0.##}.");
+            guardrailFactors.Add($"Silent-failure risk multiplies the critical share of failures by {calibrationProfile.SilentFailureCriticalShareMultiplier:0.##}.");
         }
 
         if (inputs.HasDeterministicValidation)
         {
-            guardrailFactors.Add($"Deterministic validation multiplies the modeled critical-failure rate by {DeterministicValidationCriticalMultiplier:0.##}.");
+            guardrailFactors.Add($"Deterministic validation multiplies the modeled critical-failure rate by {calibrationProfile.DeterministicValidationCriticalMultiplier:0.##}.");
         }
 
         if (inputs.CustomerFacing)
         {
-            guardrailFactors.Add($"Customer-facing exposure multiplies the critical share of failures by {CustomerFacingCriticalShareMultiplier:0.##}.");
+            guardrailFactors.Add($"Customer-facing exposure multiplies the critical share of failures by {calibrationProfile.CustomerFacingCriticalShareMultiplier:0.##}.");
         }
 
         if (inputs.HumanApprovalForHighRiskActions)
         {
-            guardrailFactors.Add($"Human approval multiplies the modeled critical-failure rate by {HumanApprovalCriticalMultiplier:0.##}.");
+            guardrailFactors.Add($"Human approval multiplies the modeled critical-failure rate by {calibrationProfile.HumanApprovalCriticalMultiplier:0.##}.");
         }
 
-        ApplyCategoryAdjustments(inputs, categoryProfile, guardrailFactors, ref criticalFailureExposureMultiplier);
+        ApplyCategoryAdjustments(inputs, categoryProfile, guardrailFactors, ref criticalFailureExposureMultiplier, calibrationProfile);
 
         difficulty = Math.Clamp(difficulty, 0, 100);
-        var tau = TauBySensitivity.GetValueOrDefault(inputs.DifficultySensitivity, 5);
-        var effectiveTau = EffectiveTau(tau, difficulty);
+        var tauKey = inputs.DifficultySensitivity.ToString().ToLowerInvariant();
+        var tau = calibrationProfile.Tau.GetValueOrDefault(tauKey, TauBySensitivity.GetValueOrDefault(inputs.DifficultySensitivity, 5));
+        var effectiveTau = EffectiveTau(tau, difficulty, calibrationProfile);
         var attempts = inputs.RetriesAllowed ? Math.Clamp(inputs.MaxAttempts, 1, 5) : 1;
         var targetSuccess = Math.Clamp(inputs.RequiredSuccessRate / 100d, 0, 1);
         var allowedCriticalFailure = Math.Clamp(inputs.AllowedCriticalFailureRate / 100d, 0, 1);
 
         var results = (await modelCatalog.GetLatestModelData())
-            .Select(model => AnalyzeModel(model, inputs, difficulty, effectiveTau, attempts, targetSuccess, allowedCriticalFailure, criticalFailureExposureMultiplier))
+            .Select(model => AnalyzeModel(model, inputs, difficulty, effectiveTau, attempts, targetSuccess, allowedCriticalFailure, criticalFailureExposureMultiplier, calibrationProfile))
             .OrderByDescending(x => x.IsEligible)
             .ThenByDescending(x => x.ExpectedValuePerTaskUsd)
             .ThenByDescending(x => x.EffectiveSuccessRate)
@@ -433,6 +453,10 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
 
         return new AnalysisSummary
         {
+            CalibrationProfileVersion = calibrationProfile.ProfileVersion,
+            CalibrationProfileHash = calibrationProfile.ProfileHash,
+            UsedCalibrationFallback = profileProvider?.UsedFallback ?? false,
+            CalibrationWarning = profileProvider?.Warning,
             EffectiveDifficulty = difficulty,
             Tau = effectiveTau,
             DifficultyFactors = difficultyFactors,
@@ -454,16 +478,17 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
         int attempts,
         double targetSuccess,
         double allowedCriticalFailure,
-        double criticalFailureExposureMultiplier)
+        double criticalFailureExposureMultiplier,
+        CalibrationProfile profile)
     {
         var reasons = new List<string>();
         const double batchSize = TaskBatchSize;
 
         // Use the category-specific AA index when it is available. Coding and agentic indices are
         // published on the same scale as the composite Intelligence Index.
-        var rawCapabilityScore = AdjustedIntelligence(model.CapabilityIndexFor(inputs.TaskCategory));
+        var rawCapabilityScore = model.CapabilityIndexFor(inputs.TaskCategory);
         var capabilityIndexName = model.CapabilityIndexNameFor(inputs.TaskCategory);
-        var adjustedIntelligence = AdjustedIntelligence(rawCapabilityScore);
+        var adjustedIntelligence = profile.AdjustedIntelligence(rawCapabilityScore);
 
         // CHANGED: success is now the product of two independent hurdles. The sigmoid models the
         // capability hurdle (can the model do the task at all); BaseErrorFloorRate models the
@@ -472,10 +497,10 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
         // could promise 99.9999% success on easy tasks and sail through a 99.5% required-success
         // gate that no real deployment clears.
         var capabilitySuccess = Math.Clamp(Sigmoid((adjustedIntelligence - difficulty) / tau), 0.000001, 0.999999);
-        var singleAttemptSuccess = (1 - BaseErrorFloorRate) * capabilitySuccess;
+        var singleAttemptSuccess = (1 - profile.ErrorFloor) * capabilitySuccess;
 
         // Retries recover only correlated capability failures; the systematic floor survives them.
-        var effectiveSuccess = (1 - BaseErrorFloorRate) * (1 - Math.Pow(1 - capabilitySuccess, EffectiveIndependentAttempts(attempts)));
+        var effectiveSuccess = (1 - profile.ErrorFloor) * (1 - Math.Pow(1 - capabilitySuccess, EffectiveIndependentAttempts(attempts, profile)));
         effectiveSuccess = Math.Clamp(effectiveSuccess, 0.000001, 0.999999);
 
         // Headroom above the difficulty bar, in [-0.5, +0.5). Drives the quality tilt on the
@@ -487,7 +512,7 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
         // understates attempts for weak models (a model that failed a hard task tends to fail the
         // retry on the same task), so the ledger charged optimistic cost against
         // correlation-discounted success -- two different retry models on the two sides.
-        var expectedAttempts = ExpectedAttempts(capabilitySuccess, attempts);
+        var expectedAttempts = ExpectedAttempts(capabilitySuccess, attempts, profile);
         var baseModelCost = model.CostPerAaTaskUsd.GetValueOrDefault() * Math.Max(0, inputs.CostMultiplier);
         var expectedModelCost = model.HasCostData ? baseModelCost * expectedAttempts * batchSize : double.NaN;
         var expectedReviewCost = Math.Max(0, inputs.HumanReviewCostUsd) * batchSize;
@@ -501,28 +526,28 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
         // NEW: downside mirror of the quality tilt. Negative headroom (marginal model) raises the
         // critical share of failures, positive headroom lowers it; see CriticalShareDifficultyTilt.
         // Applied to the user's base assumption before the detection multipliers.
-        criticalFailureShare = Math.Clamp(criticalFailureShare - qualityHeadroom * CriticalShareDifficultyTilt, 0, 1);
+        criticalFailureShare = Math.Clamp(criticalFailureShare - qualityHeadroom * profile.CriticalShareDifficultyTilt, 0, 1);
 
         if (inputs.HasSilentFailureRisk)
         {
-            criticalFailureShare = Math.Min(1, criticalFailureShare * SilentFailureCriticalShareMultiplier);
+            criticalFailureShare = Math.Min(1, criticalFailureShare * profile.SilentFailureCriticalShareMultiplier);
         }
 
         if (inputs.CustomerFacing)
         {
-            criticalFailureShare = Math.Min(1, criticalFailureShare * CustomerFacingCriticalShareMultiplier);
+            criticalFailureShare = Math.Min(1, criticalFailureShare * profile.CustomerFacingCriticalShareMultiplier);
         }
 
         var criticalFailureRate = (1 - effectiveSuccess) * criticalFailureShare * criticalFailureExposureMultiplier;
 
         if (inputs.HasDeterministicValidation)
         {
-            criticalFailureRate *= DeterministicValidationCriticalMultiplier;
+            criticalFailureRate *= profile.DeterministicValidationCriticalMultiplier;
         }
 
         if (inputs.HumanApprovalForHighRiskActions)
         {
-            criticalFailureRate *= HumanApprovalCriticalMultiplier;
+            criticalFailureRate *= profile.HumanApprovalCriticalMultiplier;
         }
 
         // CHANGED: cap the critical rate at the total failure mass. With the share saturated at 1
@@ -562,7 +587,7 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
         // at 0 and not allowed to exceed the good value (acceptable is by definition no better than
         // good); the resulting blended value is what each success is actually worth.
         var baseGoodShare = Math.Clamp(inputs.GoodOutcomeShareOfSuccesses / 100d, 0, 1);
-        var realizedGoodShare = Math.Clamp(baseGoodShare + qualityHeadroom * QualityShareDifficultyTilt, 0, 1);
+        var realizedGoodShare = Math.Clamp(baseGoodShare + qualityHeadroom * profile.QualityShareDifficultyTilt, 0, 1);
         var goodValue = Math.Max(0, inputs.BusinessValuePerSuccessUsd);
         var acceptableValue = Math.Clamp(inputs.AcceptableValuePerSuccessUsd, 0, goodValue);
         var blendedValuePerSuccess = goodValue * realizedGoodShare + acceptableValue * (1 - realizedGoodShare);
@@ -639,6 +664,8 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
 
         return new RecommendationResult
         {
+            CalibrationProfileVersion = profile.ProfileVersion,
+            CalibrationProfileHash = profile.ProfileHash,
             Model = model,
             CapabilityIndexName = capabilityIndexName,
             RawCapabilityScore = rawCapabilityScore,
@@ -677,9 +704,9 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
     /// range. Without this, the 3x top-end slope makes every curve three times sharper for frontier
     /// models than for weak ones, and the Soft/Normal/Sharp settings stop being comparable.
     /// </summary>
-    private static double EffectiveTau(double configuredTau, double difficulty)
+    private static double EffectiveTau(double configuredTau, double difficulty, CalibrationProfile profile)
     {
-        var slope = LocalCurveSlope(difficulty);
+        var slope = LocalCurveSlope(difficulty, profile);
         return configuredTau * Math.Max(slope, 0.0001);
     }
 
@@ -688,14 +715,15 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
     /// adjusted) difficulty axis. Difficulty lives on the adjusted scale, so we find the segment
     /// whose adjusted span contains it and return that segment's slope.
     /// </summary>
-    private static double LocalCurveSlope(double adjustedPoint)
+    private static double LocalCurveSlope(double adjustedPoint, CalibrationProfile profile)
     {
         var adjustedLower = 0d;
         var rawLower = 0d;
 
-        foreach (var segment in IntelligenceCurve.Segments)
+        foreach (var segment in profile.CurveSegments)
         {
-            var rawSpan = segment.UpperBoundInclusive - rawLower;
+            var upper = segment.Upper ?? double.PositiveInfinity;
+            var rawSpan = upper - rawLower;
             var adjustedUpper = double.IsPositiveInfinity(rawSpan) ? double.PositiveInfinity : adjustedLower + rawSpan * segment.Slope;
 
             if (adjustedPoint <= adjustedUpper || double.IsPositiveInfinity(adjustedUpper))
@@ -704,10 +732,10 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
             }
 
             adjustedLower = adjustedUpper;
-            rawLower = segment.UpperBoundInclusive;
+            rawLower = upper;
         }
 
-        return IntelligenceCurve.Segments[^1].Slope;
+        return profile.CurveSegments[^1].Slope;
     }
 
     /// <summary>
@@ -717,7 +745,7 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
     /// retries help least. We convert N nominal attempts into a smaller number of effective
     /// independent attempts.
     /// </summary>
-    private static double EffectiveIndependentAttempts(int attempts)
+    private static double EffectiveIndependentAttempts(int attempts, CalibrationProfile profile)
     {
         if (attempts <= 1)
         {
@@ -731,7 +759,7 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
         var weight = 1d;
         for (var i = 1; i < attempts; i++)
         {
-            weight *= RetryCorrelationDecay;
+            weight *= profile.RetryCorrelationDecay;
             effective += weight;
         }
 
@@ -812,7 +840,8 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
         UseCaseInputs inputs,
         TaskCategoryProfile profile,
         List<string> guardrailFactors,
-        ref double criticalFailureExposureMultiplier)
+        ref double criticalFailureExposureMultiplier,
+        CalibrationProfile calibrationProfile)
     {
         switch (profile.Category)
         {
@@ -821,8 +850,8 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
                 {
                     // Retained: conditioned on strict schema *and* validation together, this is a
                     // distinct signal from the standalone validation flag, not a duplicate of it.
-                    criticalFailureExposureMultiplier *= ExtractionStrictValidationCriticalMultiplier;
-                    guardrailFactors.Add($"Strict extraction output with deterministic validation multiplies critical-failure exposure by {ExtractionStrictValidationCriticalMultiplier:0.##}.");
+                    criticalFailureExposureMultiplier *= calibrationProfile.ExtractionStrictValidationCriticalMultiplier;
+                    guardrailFactors.Add($"Strict extraction output with deterministic validation multiplies critical-failure exposure by {calibrationProfile.ExtractionStrictValidationCriticalMultiplier:0.##}.");
                 }
 
                 if (inputs.OutputConstraint == OutputConstraintOption.FreeText)
@@ -883,7 +912,7 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
     /// AnalyzeModel. Correlated retries burn more attempts than independent ones, so this raises
     /// expected cost and latency for marginal models, consistent with their discounted success.
     /// </remarks>
-    private static double ExpectedAttempts(double capabilitySuccess, int maxAttempts)
+    private static double ExpectedAttempts(double capabilitySuccess, int maxAttempts, CalibrationProfile profile)
     {
         capabilitySuccess = Math.Clamp(capabilitySuccess, 0.000001, 0.999999);
         var capabilityFailure = 1 - capabilitySuccess;
@@ -895,9 +924,9 @@ public class RecommendationEngine(ModelCatalog modelCatalog)
         for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
             // Survival probability entering this attempt; the first term is always 1.
-            expected += BaseErrorFloorRate + (1 - BaseErrorFloorRate) * Math.Pow(capabilityFailure, effectiveAttemptsSoFar);
+            expected += profile.ErrorFloor + (1 - profile.ErrorFloor) * Math.Pow(capabilityFailure, effectiveAttemptsSoFar);
             effectiveAttemptsSoFar += nextAttemptWeight;
-            nextAttemptWeight *= RetryCorrelationDecay;
+            nextAttemptWeight *= profile.RetryCorrelationDecay;
         }
 
         return expected;

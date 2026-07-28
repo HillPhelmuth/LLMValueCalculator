@@ -8,5 +8,6 @@ builder.Services.AddHttpClient("ApiClient", client =>
 });
 builder.Services.AddScoped(sp => sp.GetRequiredService<IHttpClientFactory>().CreateClient("ApiClient"));
 builder.Services.AddScoped<ModelCatalog>();
+builder.Services.AddScoped<CalibrationProfileProvider>();
 builder.Services.AddScoped<RecommendationEngine>();
 await builder.Build().RunAsync();

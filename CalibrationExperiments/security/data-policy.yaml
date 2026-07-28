@@ -1,0 +1,40 @@
+version: 1
+default:
+  provider_data_collection: deny
+  zero_data_retention: true
+  persist_raw_provider_payloads: false
+  retention_days: 30
+  secrets_source: environment-or-secret-store
+data_classes:
+  synthetic_smoke:
+    allowed_for: [fake_provider, approved_openrouter_canary]
+    provider_data_collection: deny
+    zero_data_retention: true
+    license: CC0-1.0
+  public_benchmark:
+    allowed_for: [approved_calibration_runs]
+    provider_data_collection: deny
+    zero_data_retention: true
+    license_review_required: true
+  operational_shadow:
+    allowed_for: []
+    provider_data_collection: deny
+    zero_data_retention: true
+    approval_required: true
+  secrets:
+    allowed_for: []
+    persisted: false
+    provider_payloads: forbidden
+routing_requirements:
+  openrouter:
+    data_collection: deny
+    zdr: true
+    live_calls_require: CALIBRATION_LIVE_APPROVED=true
+dataset_license_requirements:
+  required_fields: [license, source_url, revision, terms_review]
+  block_unreviewed_external_sources: true
+full_run_gate:
+  require_security_review_status: approved
+  require_dependency_audit: true
+  require_secret_scan: true
+  require_artifact_integrity: true

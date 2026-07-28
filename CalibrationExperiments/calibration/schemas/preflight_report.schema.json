@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "calibration/preflight-report/1.0",
+  "type": "object",
+  "required": ["schema_version", "status", "manifest_hash", "catalog_snapshot_hash", "estimated_requests", "estimated_tokens", "estimated_cost", "checks", "canary", "approval_required"],
+  "properties": {"schema_version": {"const": "1.0"}, "status": {"enum": ["pass", "fail"]}, "manifest_hash": {"type": "string", "minLength": 64}, "catalog_snapshot_hash": {"type": "string", "minLength": 64}, "estimated_requests": {"type": "integer", "minimum": 0}, "estimated_tokens": {"type": "integer", "minimum": 0}, "estimated_cost": {"type": "string"}, "checks": {"type": "array", "items": {"type": "object"}}, "canary": {"type": "object"}, "approval_required": {"type": "boolean"}},
+  "additionalProperties": false
+}

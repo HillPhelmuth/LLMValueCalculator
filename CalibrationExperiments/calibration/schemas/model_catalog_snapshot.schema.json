@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "calibration/model-catalog-snapshot/1.0",
+  "type": "object",
+  "required": ["schema_version", "snapshot_id", "captured_utc", "source_url", "models", "raw_pages", "snapshot_hash"],
+  "properties": {
+    "schema_version": {"const": "1.0"}, "snapshot_id": {"type": "string"}, "captured_utc": {"type": "string"}, "source_url": {"type": "string", "format": "uri"}, "models": {"type": "array", "items": {"type": "object"}}, "raw_pages": {"type": "array", "items": {"type": "object"}}, "snapshot_hash": {"type": "string", "minLength": 64}
+  },
+  "additionalProperties": false
+}

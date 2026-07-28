@@ -1,0 +1,182 @@
+experiment_id: experiment-1-judge-main-v1-recovery
+dataset:
+  adapter: jsonl
+  revision: sha256:643a5d18be0ffe674f5c987768ed0648c90f59c5099c82e9a97de0ceffa14226
+  split: all
+  sample_seed: 20260718
+  options:
+    path: C:\Users\adamh\source\repos\AAInteractiveValueAnalyzer\CalibrationExperiments\.pytest-tmp\recovery-command-smoke\experiment-1-judge-recovery.jsonl
+  sample_ids:
+  - judge:main:01cf3c5d-8a34-4b2e-a2d4-825e12852f9a
+  - judge:main:07945ecc-3426-493b-a774-16e1a7e04cf3
+  - judge:main:07a462d3-9c28-4325-92de-27b36eb3df8e
+  - judge:main:0bf420de-eab2-41d0-a400-58acca48d2e6
+  - judge:main:0c62f3e8-35bd-4bbb-a46d-94582c8beec1
+  - judge:main:104a149f-80d9-4503-a222-b3c4b25cc3d6
+  - judge:main:10f68895-ac5a-4d26-a1fd-f353193b4430
+  - judge:main:12122a89-9efa-4b6a-a02d-e845adc63411
+  - judge:main:159e94d0-bc08-46bc-bd40-4035f09c4ffb
+  - judge:main:16b503d6-cad1-40ac-9f10-99d2646d1fbc
+  - judge:main:18376d4d-d9a7-4144-b9cc-843cfb6391aa
+  - judge:main:1a2d84aa-dd97-48c3-bce1-04ca778cf12a
+  - judge:main:1d899e07-4ecc-4ff1-8117-330b5a1d832c
+  - judge:main:1e15f45f-adfb-49a5-baee-eb390c24d5a4
+  - judge:main:258b0842-4ef2-4671-beb2-12aff656795f
+  - judge:main:2880e8a9-5d10-4df9-9bc7-0e6378d069ec
+  - judge:main:2c2c0e0b-c5b7-47e6-b7ec-cfd104f53417
+  - judge:main:30224483-ab31-42e0-8681-3c13dca08704
+  - judge:main:30a8d8fa-eb29-48b5-a54a-89d118392b05
+  - judge:main:311e444a-a0bc-4bac-9708-ac984b312c0c
+  - judge:main:34114eae-cfa6-4475-84af-813bc22963e1
+  - judge:main:34173592-bed6-4a75-bff1-9ddcb8866d79
+  - judge:main:3526ee48-5d7b-4755-b7cd-da107d476a45
+  - judge:main:355264e3-cafa-47bb-9d8f-223d83c2e7c5
+  - judge:main:3bf77431-ee5f-4b3b-9e71-df80fc4eac4d
+  - judge:main:3c18df8f-6043-4044-83e5-c1aa6e93ae27
+  - judge:main:3ec6926b-065a-4e0a-9c3c-000151126e44
+  - judge:main:41c9b5cf-04e3-4e70-b1f6-f8b19014cb7d
+  - judge:main:41d5ab12-bb32-45ea-95cd-dc4c502fb9d6
+  - judge:main:43485f87-3a59-41b6-9b47-fa27b002c320
+  - judge:main:43c4b7ff-d236-4be7-beaa-1ada2827b7fa
+  - judge:main:4a08fa1b-fb92-4e8f-ba0d-8dea0bc006d1
+  - judge:main:4bee8ae7-fda0-4147-b7d3-2b15c3ba9ae1
+  - judge:main:4c02cf22-47fb-40f8-baee-ac9db3b5d35c
+  - judge:main:4e543425-e386-42fa-a710-67e871a3faaa
+  - judge:main:509e8249-b021-4bc3-822d-94981288d32e
+  - judge:main:54d08bbf-d89a-4622-9d5a-794d7484e9c9
+  - judge:main:5577bc3b-2ed5-4342-b81a-028c43b13e09
+  - judge:main:5672c0bd-2a94-4b27-8d5a-8764901b86c1
+  - judge:main:56af2b4e-cacd-48a6-8421-231b9a784e54
+  - judge:main:5f4ac528-f098-42b2-84fc-d071cc6d0dcc
+  - judge:main:6031955e-65da-4ad5-9adc-0bd110f7a330
+  - judge:main:6047c772-9d2b-46eb-bd83-9d72b4337783
+  - judge:main:612c3d1d-8d98-4f05-82b5-4fa2ebf82b97
+  - judge:main:6132f43d-fe69-48d4-bf81-d8533444bfc7
+  - judge:main:61f1f7f5-9f12-42e1-9529-d026f3800d01
+  - judge:main:637a38fe-10ca-4b0b-a7ab-6e35944d1e55
+  - judge:main:65ea89c1-58e2-4eb2-998f-ca801f66a78e
+  - judge:main:6620b0e7-adb9-4515-8e61-305e4b14cbfe
+  - judge:main:68cf3295-6188-4174-b675-5405ecf47fd8
+  - judge:main:6c2339a2-a855-4adf-afbd-c287c69271ae
+  - judge:main:6c245a5c-3fd9-4f01-b474-e4dd54783dc1
+  - judge:main:6d81e06c-7351-4e4b-ba2d-346bfe43104a
+  - judge:main:744f303c-55a1-4b7a-a0a6-a81cb34b82e1
+  - judge:main:74681c53-607d-4dfc-b4ca-6fec5589e582
+  - judge:main:756da531-2ca5-4391-b3b8-3f4835cc871a
+  - judge:main:7583f457-f7c1-4d2d-af52-137e806d7dce
+  - judge:main:76a12685-1514-4899-9cb9-62034ac5f274
+  - judge:main:7c186540-203c-4e7a-b756-7f731846239f
+  - judge:main:7d795064-a092-4017-bd43-79359566ea6d
+  - judge:main:80992ed5-f0f4-449d-96dc-6bcbc86dfb84
+  - judge:main:831e828a-224a-4229-8383-f8322bd0f950
+  - judge:main:87046d73-b6be-4252-9e45-8bc1801ee2f0
+  - judge:main:881074f1-a103-490f-a357-b5919cb81fb0
+  - judge:main:8f7b3660-35fc-4d68-aeaf-8e89b37f4f9c
+  - judge:main:8fefa486-b7ad-4bc1-9ec2-f50512cd1ff6
+  - judge:main:908ef468-b333-4633-b163-4cb87677b04b
+  - judge:main:915004ef-864f-4d00-a60d-192dc72356d9
+  - judge:main:937e23bf-9389-4956-9d2f-d91b17bd197a
+  - judge:main:96930c17-2b8b-43ce-8573-169e6b2a1be8
+  - judge:main:97857cc2-10a1-4c8c-8d31-1a6e78df598e
+  - judge:main:98ce9d9f-4de0-4419-8ad5-8f1d75fb121f
+  - judge:main:9912bfe4-6b97-4fcb-ba47-c771f1483936
+  - judge:main:9d83d6fe-a843-4079-ae2c-ae455ba2e5d8
+  - judge:main:9e65a193-5ddd-4f91-882b-605461a959d4
+  - judge:main:9e83391b-5afe-40ba-86e2-1ce9ca94e4e3
+  - judge:main:a1390d9e-447b-4512-87a3-5cb79f84a456
+  - judge:main:a1a3a0ee-7a7e-4243-92c4-1718e3d4dfb0
+  - judge:main:a3c2f838-95a5-4532-9c5c-b8e9f5e312ad
+  - judge:main:a457fc80-72b8-40c6-a851-858837629c27
+  - judge:main:a70bff7d-5e91-4dd2-a97a-0b35cd0b70cf
+  - judge:main:a7e1da34-9ef5-4d91-8a7d-42e539a7fd6e
+  - judge:main:a803554f-a05c-4eff-a737-05da224f02ec
+  - judge:main:a9c75893-fff8-4d46-8802-edb5fc3ff1eb
+  - judge:main:ad7c8a47-4dd1-4794-9004-088d69aa1848
+  - judge:main:ae1e671d-67f4-49a9-9569-96e41404c025
+  - judge:main:b1219d4c-24bd-480c-b688-c7e7f5d6ed67
+  - judge:main:b2d068b4-1130-4a5a-b230-4959a619fffa
+  - judge:main:b5145dce-98d1-4e89-bcd8-3b614741d5e1
+  - judge:main:b627a209-a626-4e69-9123-6c01250f22c3
+  - judge:main:b7fedc82-4604-493d-97bc-8e504e844cf2
+  - judge:main:b853d64f-5f07-4113-b099-e5d50ee8f95d
+  - judge:main:b88732c8-342d-46f2-9a25-0e4fa11177b2
+  - judge:main:b8b799a1-2f1b-41bf-94a9-2098346337ce
+  - judge:main:bb06a158-ad34-47f0-aa2a-6a2497fabd32
+  - judge:main:be5bd6d9-5ae4-48ab-a3e3-e4c565c587db
+  - judge:main:bea5c40e-67eb-4203-b405-a6a7346f5de4
+  - judge:main:bfcf6df0-2a0c-42f0-b714-0c178894c725
+  - judge:main:c147a1e3-5162-47a1-ae12-e46e67236321
+  - judge:main:c4460192-1660-4be2-a21c-0bc42995ceb8
+  - judge:main:c888bc45-4189-4c3e-af9b-dc0ac41df55b
+  - judge:main:c9e50364-6fe8-4719-ba27-cf9cdce4ccd6
+  - judge:main:cb0f5dee-c9c1-449e-8e0a-ed29a9edcf5a
+  - judge:main:cc67fc8d-1612-4d56-8890-8e6ffe124a9d
+  - judge:main:cca40e91-dc69-4d66-9adb-df998697a6c0
+  - judge:main:cd9b67c0-2a35-4d69-ad27-ffe1de94b3b6
+  - judge:main:ce6aeaa5-645b-4c1a-8837-43a15a2e3628
+  - judge:main:ce725e3f-ee9c-46c9-8ed7-27256c189970
+  - judge:main:d3522346-8d13-44a0-a575-4ed567d38b0d
+  - judge:main:d5470c51-e162-420d-aaba-fcd8465acdde
+  - judge:main:d6daa31c-4dee-446f-94b9-9cf7f8eb0ef1
+  - judge:main:d803ec00-d215-4eb3-9152-143362440709
+  - judge:main:dc42e989-f477-4880-bf7b-ef2ae7afb6bf
+  - judge:main:e018c3b8-6ebf-4f8b-90f1-886627e695b3
+  - judge:main:e25ba1db-7d0f-4a18-b110-dd78cfda5203
+  - judge:main:e2b304cd-7d0f-4286-b792-c33a4258705c
+  - judge:main:e35d0cc5-5eea-4e1b-8e57-48b460667ae0
+  - judge:main:e3c40f4a-fdf6-4166-afa9-895b57c127b4
+  - judge:main:e49912d3-b549-4655-8ea4-96dc29e10d14
+  - judge:main:e81603b8-1235-4681-9426-c2de299c5cc4
+  - judge:main:ea27b0e4-ee74-45c7-80b5-41dc568d2fe8
+  - judge:main:eb0aa8bc-2dea-4108-953f-ae6f815ad90b
+  - judge:main:eb839fe0-c44e-411c-ab1b-d1ea1f266ed7
+  - judge:main:ebae5650-772e-44eb-b88e-96915dea695d
+  - judge:main:ef5fe9bd-7132-4e00-b560-d9f358221b66
+  - judge:main:f2ac65e7-f720-4395-a25c-6eb783e3f68a
+  - judge:main:f4ef9435-dbc0-48bb-bdf2-0b8cd54557ba
+  - judge:main:fa3edb16-e271-4b54-88e6-9425be26ef24
+  - judge:main:fca01b16-8bb9-4145-aaa8-7ef78f4fd1c4
+models:
+- catalog_id: deepseek/deepseek-v4-flash
+  provider: openrouter
+  provider_model: deepseek/deepseek-v4-flash-20260423
+  aa_snapshot: 2026-07-19T070338.756666+0000-9debba52d50c3e6e
+generation:
+  temperature: 0.0
+  max_output_tokens: 2048
+  reasoning_effort: high
+  repeats: 1
+prompt_version: experiment-1-semantic-judge-v1-recovery-v1
+prompt_hashes:
+- df0cd7e77a7b135251a69b0b9d278a4a42ac107bb643c4924b1c7f7ae3a5ea3f
+conditions:
+- baseline
+scorers:
+- llm_semantic_correctness
+scorer_configs:
+  llm_semantic_correctness:
+    judge_model_id: deepseek/deepseek-v4-flash
+    judge_model_version: deepseek/deepseek-v4-flash-20260423
+    judge_lock_hash: e4c6261317b0d20adbdeca36a25e01335876c0c49c144101b9fa3002f6ba046b
+    validation_status: not_run_by_policy
+routing:
+  allow_fallbacks: false
+  data_collection: deny
+  zdr: true
+  require_parameters: true
+budgets:
+  max_requests: 387
+  max_tokens: 2377728
+  max_usd: 23.48808182506
+  max_retries: 2
+retries:
+  transport_retries: 2
+  experimental_retries: 0
+  backoff_seconds: 0.5
+holdouts:
+  dataset_ids: []
+  model_fraction: 0.0
+fitting:
+  estimator: llm-semantic-judge-v1
+  seed: 20260718
+  data_revision: 1c5d8c187e0b3c78f9e48399a42b076a5be265d6d41c6a500dab70ed06852848

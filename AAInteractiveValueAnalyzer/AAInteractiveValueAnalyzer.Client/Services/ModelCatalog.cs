@@ -44,7 +44,8 @@ public sealed class ModelCatalog
         catch (Exception exception) when (exception is HttpRequestException or JsonException or TaskCanceledException)
         {
             Console.Error.WriteLine($"Unable to load current model data. Using the bundled snapshot. {exception.Message}");
-            return Models;
+            _cachedProfiles = Models;
+            return _cachedProfiles;
         }
     }
 

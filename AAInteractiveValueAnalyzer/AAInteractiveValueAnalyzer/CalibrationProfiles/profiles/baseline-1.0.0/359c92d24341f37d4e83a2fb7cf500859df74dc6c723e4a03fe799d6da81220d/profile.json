@@ -1,0 +1,23 @@
+{
+  "aa_snapshot": "baseline-aa-snapshot-1.0.0",
+  "adjustments": {},
+  "curve_segments": [
+    { "slope": 1.0, "upper": 10.0 },
+    { "slope": 1.4, "upper": 20.0 },
+    { "slope": 1.8, "upper": 30.0 },
+    { "slope": 2.2, "upper": 40.0 },
+    { "slope": 2.6, "upper": 50.0 },
+    { "slope": 3.0, "upper": null }
+  ],
+  "error_floor": 0.01,
+  "fitting_data_hash": "baseline-fitting-data-1.0.0",
+  "manifest_hashes": ["baseline-manifest-1.0.0"],
+  "profile_hash": "359c92d24341f37d4e83a2fb7cf500859df74dc6c723e4a03fe799d6da81220d",
+  "profile_version": "baseline-1.0.0",
+  "promotion_decisions": {},
+  "risk_multipliers": {},
+  "schema_version": "1.0",
+  "source_estimate_ids": [],
+  "tau": { "normal": 5.0, "sharp": 3.0, "soft": 8.0 },
+  "uncertainty": {}
+}

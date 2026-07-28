@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "calibration/artifact-metadata/1.0",
+  "type": "object",
+  "required": ["schema_version", "sha256", "media_type", "byte_length", "compression", "created_utc", "uri"],
+  "properties": {"schema_version": {"const": "1.0"}, "sha256": {"type": "string", "minLength": 64}, "media_type": {"type": "string"}, "byte_length": {"type": "integer", "minimum": 0}, "compression": {"enum": ["none", "gzip"]}, "created_utc": {"type": "string"}, "uri": {"type": "string"}},
+  "additionalProperties": false
+}

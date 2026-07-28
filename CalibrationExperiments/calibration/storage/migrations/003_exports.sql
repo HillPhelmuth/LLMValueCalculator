@@ -1,0 +1,2 @@
+-- Version 3: immutable run_exports records for Parquet snapshots.
+-- See SqliteRunStore._apply_export_schema for the transactional DDL.
