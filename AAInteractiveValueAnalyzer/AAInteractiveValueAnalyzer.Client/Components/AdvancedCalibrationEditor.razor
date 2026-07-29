@@ -1,0 +1,170 @@
+@using AAInteractiveValueAnalyzer.Client.Models
+@inject CalibrationSettingsService CalibrationSettings
+
+@if (IsOpen)
+{
+    <div class="config-drawer-backdrop calibration-backdrop" @onclick="CloseAsync"></div>
+    <aside class="config-drawer-panel calibration-drawer" role="dialog" aria-modal="true" aria-labelledby="calibration-title">
+        <section class="control-panel calibration-panel" @onclick:stopPropagation="true">
+            <div class="section-heading split compact-actions">
+                <div>
+                    <p class="command-eyebrow">Model assumptions</p>
+                    <h2 id="calibration-title">Advanced calibration</h2>
+                    <p>Fine-tune the curve and risk assumptions behind every recommendation. Changes are saved only in this browser.</p>
+                </div>
+                <button type="button" class="icon-button drawer-close" title="Close advanced calibration" aria-label="Close advanced calibration" @onclick="CloseAsync">×</button>
+            </div>
+
+            @if (!IsLoaded)
+            {
+                <div class="compact-callout" role="status">Loading calibration settings…</div>
+            }
+            else
+            {
+                <div class="compact-callout calibration-profile-status" role="status">
+                    <strong>@(CalibrationSettings.HasOverrides ? "Local overrides active" : "Server defaults active")</strong>
+                    <span>Based on @CalibrationSettings.BaseProfile.ProfileVersion · @CalibrationSettings.BaseProfile.ProfileHash[..12]</span>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(StatusMessage))
+                {
+                    <div class="compact-callout" role="status">@StatusMessage</div>
+                }
+                @if (Errors.Count > 0)
+                {
+                    <div class="compact-callout error-callout" role="alert">
+                        <strong>Review calibration values before applying.</strong>
+                        <ul>
+                            @foreach (var error in Errors.Values.Distinct())
+                            {
+                                <li>@error</li>
+                            }
+                        </ul>
+                    </div>
+                }
+                <section class="dense-section calibration-section" aria-labelledby="calibration-curve-title">
+                    <div class="section-heading compact-heading">
+                        <div>
+                            <h3 id="calibration-curve-title">Capability curve</h3>
+                            <p>Each row maps one raw intelligence range to its slope. A score moves through the rows from left to right; the final row covers every score above its starting point.</p>
+                        </div>
+                    </div>
+                    <div class="curve-table" role="table" aria-label="Capability curve segments">
+                        <div class="curve-table-header" role="row">
+                            <span role="columnheader">Segment range</span>
+                            <span role="columnheader">Upper bound</span>
+                            <span role="columnheader">Slope</span>
+                            <span aria-hidden="true"></span>
+                        </div>
+                        @for (var index = 0; index < CurveSlopes.Count; index++)
+                        {
+                            var segmentIndex = index;
+                            var isFinalSegment = segmentIndex == CurveSlopes.Count - 1;
+                            var curveSlope = CurveSlopes[segmentIndex];
+                            <div @key="index" class="curve-table-row" role="row">
+                                <div class="curve-range" role="cell">
+                                    <strong>Segment @(@segmentIndex + 1)</strong>
+                                    <span>@FormatCurveStart(segmentIndex) → @(isFinalSegment ? "and above" : "upper bound")</span>
+                                </div>
+                                <div role="cell">
+                                    @if (isFinalSegment)
+                                    {
+                                        <span class="curve-tail">Open-ended</span>
+                                    }
+                                    else
+                                    {
+                                        <label class="compact-field @Invalid($"breakpoint-{segmentIndex}")">
+                                            <div class="field-label-row">
+                                                <span>Ends at</span>
+                                                <CalibrationHelpPopover Id="@UpperHelpId(segmentIndex)" Title="Upper bound" Description="This is where the current segment ends. The next segment starts at this exact score, so upper bounds must increase from top to bottom." />
+                                            </div>
+                                            <input type="number" step="0.1" aria-label="Segment @(@segmentIndex + 1) upper bound" @bind="CurveBreakpoints[segmentIndex]" />
+                                            @if (Errors.TryGetValue($"breakpoint-{segmentIndex}", out var breakpointError)) { <small>@breakpointError</small> }
+                                        </label>
+                                    }
+                                </div>
+                                <div role="cell">
+                                    <label class="compact-field @Invalid($"slope-{segmentIndex}")" title="@(segmentIndex == 0 ? "Anchored at 1" : "")">
+                                        <div class="field-label-row">
+                                            <span>Slope</span>
+                                            <CalibrationHelpPopover Id="@SlopeHelpId(segmentIndex)" Title="Segment slope" Description="Slope determines how much adjusted intelligence increases for each raw-score point inside this segment. Slopes cannot decrease between segments." />
+                                        </div>
+                                        <input type="number" step=".1" aria-label="Segment @(@segmentIndex + 1) slope" @bind="@CurveSlopes[segmentIndex]" disabled="@(segmentIndex == 0)" />
+                                        @* @if (segmentIndex == 0) { <small>Anchored at 1</small> } *@
+                                        @if (Errors.TryGetValue($"slope-{segmentIndex}", out var slopeError)) { <small>@slopeError</small> }
+                                    </label>
+                                </div>
+                                <div class="curve-row-action" role="cell">
+                                    @if (segmentIndex > 0)
+                                    {
+                                        <button type="button" class="icon-button" title="Remove segment @(@segmentIndex + 1)" aria-label="Remove segment @(@segmentIndex + 1)" @onclick="() => RemoveSegment(segmentIndex)">−</button>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    @if (Errors.TryGetValue("curve-breakpoints", out var curveError)) { <p class="calibration-error">@curveError</p> }
+                    <button type="button" class="secondary-button calibration-add-segment" @onclick="AddSegment">Add segment</button>
+                    <p class="calibration-footnote">The first segment is retained as the raw-score anchor. Remove any later row to merge the curve back toward one segment.</p>
+                </section>
+
+                <section class="dense-section calibration-section" aria-labelledby="calibration-success-title">
+                    <div class="section-heading compact-heading">
+                        <div>
+                            <h3 id="calibration-success-title">Success curve</h3>
+                            <p>Tau controls how abruptly capability translates into success: lower values make the transition sharper. The error floor is the irreducible chance of failure.</p>
+                        </div>
+                    </div>
+                    <div class="dense-form-grid two-up">
+                        @foreach (var field in TauFields)
+                        {
+                            <label class="compact-field @Invalid($"tau-{field.Key}")">
+                                <div class="field-label-row">
+                                    <span>@field.Label</span>
+                                    <CalibrationHelpPopover Id="@TauHelpId(field.Key)" Title="@field.Label" Description="@field.Help" />
+                                </div>
+                                <input type="number" step="any" @bind="Tau[field.Key]" />
+                                @if (Errors.TryGetValue($"tau-{field.Key}", out var tauError)) { <small class="calibration-error">@tauError</small> }
+                            </label>
+                        }
+                        <label class="compact-field @Invalid("error-floor")">
+                            <div class="field-label-row">
+                                <span>Error floor</span>
+                                <CalibrationHelpPopover Id="error-floor-help" Title="Error floor" Description="The error floor is the minimum remaining failure probability after capability and retries are considered. It must be at least 0 and below 1." />
+                            </div>
+                            <input type="number" min="0" max="0.999999" step="any" @bind="ErrorFloor" />
+                            @if (Errors.TryGetValue("error-floor", out var errorFloorError)) { <small class="calibration-error">@errorFloorError</small> }
+                        </label>
+                    </div>
+                </section>
+
+                <section class="dense-section calibration-section" aria-labelledby="calibration-risk-title">
+                    <div class="section-heading compact-heading">
+                        <div>
+                            <h3 id="calibration-risk-title">Risk behavior</h3>
+                            <p>These multipliers adjust failure severity, outcome quality, and the independence of repeated attempts.</p>
+                        </div>
+                    </div>
+                    <div class="dense-form-grid two-up">
+                        @foreach (var field in RiskFields)
+                        {
+                            <label class="compact-field @Invalid($"risk-{field.Key}")">
+                                <div class="field-label-row">
+                                    <span>@field.Label</span>
+                                    <CalibrationHelpPopover Id="@RiskHelpId(field.Key)" Title="@field.Label" Description="@field.Help" />
+                                </div>
+                                <input type="number" step="any" @bind="RiskMultipliers[field.Key]" />
+                                @if (Errors.TryGetValue($"risk-{field.Key}", out var riskError)) { <small class="calibration-error">@riskError</small> }
+                            </label>
+                        }
+                    </div>
+                </section>
+            }
+
+            <div class="drawer-actions">
+                <button type="button" class="secondary-button" @onclick="ResetAsync" disabled="@(!IsLoaded)">Reset calibration</button>
+                <button type="button" class="primary-button" @onclick="ApplyAsync" disabled="@(!IsLoaded)">Apply &amp; recalculate</button>
+            </div>
+        </section>
+    </aside>
+}

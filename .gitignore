@@ -477,3 +477,5 @@ FodyWeavers.xsd
 /AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/obj/AAInteractiveValueAnalyzer.Client.csproj.nuget.dgspec.json
 /AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/obj/project.assets.json
 /AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/obj/project.nuget.cache
+/AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer/AAOutput
+/AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/obj/Debug/net10.0/AAInteractiveValueAnalyzer.Client.csproj.AssemblyReference.cache

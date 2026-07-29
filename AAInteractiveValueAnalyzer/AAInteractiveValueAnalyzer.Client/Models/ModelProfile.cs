@@ -31,15 +31,13 @@ public sealed record ModelProfile(
 
     public double CapabilityIndexFor(TaskCategoryOption category) => category switch
     {
-        TaskCategoryOption.CodeGeneration when HasCodingIndex => CodingIndex!.Value,
-        TaskCategoryOption.AgenticWorkflow when HasAgenticIndex => AgenticIndex!.Value,
+        TaskCategoryOption.CodeGeneration when HasCodingIndex => IntelligenceIndex,
+        TaskCategoryOption.AgenticWorkflow when HasAgenticIndex => IntelligenceIndex,
         _ => IntelligenceIndex
     };
 
     public string CapabilityIndexNameFor(TaskCategoryOption category) => category switch
     {
-        TaskCategoryOption.CodeGeneration when HasCodingIndex => "Artificial Analysis Coding Index",
-        TaskCategoryOption.AgenticWorkflow when HasAgenticIndex => "Artificial Analysis Agentic Index",
         _ => "Artificial Analysis Intelligence Index"
     };
 }

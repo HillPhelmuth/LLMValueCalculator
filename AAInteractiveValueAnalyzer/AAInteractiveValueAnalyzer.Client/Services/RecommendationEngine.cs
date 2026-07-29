@@ -17,13 +17,13 @@ namespace AAInteractiveValueAnalyzer.Client.Services;
 public class RecommendationEngine
 {
     private readonly ModelCatalog modelCatalog;
-    private readonly CalibrationProfileProvider? profileProvider;
+    private readonly CalibrationSettingsService? calibrationSettings;
     private readonly CalibrationProfile? fixedProfile;
 
-    public RecommendationEngine(ModelCatalog modelCatalog, CalibrationProfileProvider profileProvider)
+    public RecommendationEngine(ModelCatalog modelCatalog, CalibrationSettingsService calibrationSettings)
     {
         this.modelCatalog = modelCatalog;
-        this.profileProvider = profileProvider;
+        this.calibrationSettings = calibrationSettings;
     }
 
     public RecommendationEngine(ModelCatalog modelCatalog, CalibrationProfile profile)
@@ -391,7 +391,9 @@ public class RecommendationEngine
     /// <returns>A summary containing difficulty factors, guardrails, and ranked model recommendations.</returns>
     public async Task<AnalysisSummary> Analyze(UseCaseInputs inputs)
     {
-        var calibrationProfile = fixedProfile ?? await profileProvider!.GetActiveAsync();
+        if (calibrationSettings is not null)
+            await calibrationSettings.InitializeAsync();
+        var calibrationProfile = fixedProfile ?? calibrationSettings!.EffectiveProfile;
         var difficultyFactors = new List<string>();
         var guardrailFactors = new List<string>();
         var categoryProfile = ResolveTaskCategoryProfile(inputs.TaskCategory);
@@ -441,8 +443,9 @@ public class RecommendationEngine
         var targetSuccess = Math.Clamp(inputs.RequiredSuccessRate / 100d, 0, 1);
         var allowedCriticalFailure = Math.Clamp(inputs.AllowedCriticalFailureRate / 100d, 0, 1);
 
+        var usesCalibrationOverrides = calibrationSettings?.HasOverrides ?? false;
         var results = (await modelCatalog.GetLatestModelData())
-            .Select(model => AnalyzeModel(model, inputs, difficulty, effectiveTau, attempts, targetSuccess, allowedCriticalFailure, criticalFailureExposureMultiplier, calibrationProfile))
+            .Select(model => AnalyzeModel(model, inputs, difficulty, effectiveTau, attempts, targetSuccess, allowedCriticalFailure, criticalFailureExposureMultiplier, calibrationProfile, usesCalibrationOverrides))
             .OrderByDescending(x => x.IsEligible)
             .ThenByDescending(x => x.ExpectedValuePerTaskUsd)
             .ThenByDescending(x => x.EffectiveSuccessRate)
@@ -455,8 +458,9 @@ public class RecommendationEngine
         {
             CalibrationProfileVersion = calibrationProfile.ProfileVersion,
             CalibrationProfileHash = calibrationProfile.ProfileHash,
-            UsedCalibrationFallback = profileProvider?.UsedFallback ?? false,
-            CalibrationWarning = profileProvider?.Warning,
+            UsesCalibrationOverrides = usesCalibrationOverrides,
+            UsedCalibrationFallback = calibrationSettings?.UsedFallback ?? false,
+            CalibrationWarning = calibrationSettings?.Warning,
             EffectiveDifficulty = difficulty,
             Tau = effectiveTau,
             DifficultyFactors = difficultyFactors,
@@ -479,7 +483,8 @@ public class RecommendationEngine
         double targetSuccess,
         double allowedCriticalFailure,
         double criticalFailureExposureMultiplier,
-        CalibrationProfile profile)
+        CalibrationProfile profile,
+        bool usesCalibrationOverrides)
     {
         var reasons = new List<string>();
         const double batchSize = TaskBatchSize;
@@ -666,6 +671,7 @@ public class RecommendationEngine
         {
             CalibrationProfileVersion = profile.ProfileVersion,
             CalibrationProfileHash = profile.ProfileHash,
+            UsesCalibrationOverrides = usesCalibrationOverrides,
             Model = model,
             CapabilityIndexName = capabilityIndexName,
             RawCapabilityScore = rawCapabilityScore,

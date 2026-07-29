@@ -1,0 +1,27 @@
+.calibration-help-popover {
+    position: fixed;
+    inset: 50% auto auto 50%;
+    margin: 0;
+    transform: translate(-50%, -50%);
+    width: min(280px, calc(94vw - 64px));
+    padding: 10px 34px 10px 11px;
+    border: 1px solid var(--deck-border);
+    border-radius: 9px;
+    color: var(--deck-text);
+    background: var(--deck-surface-raised);
+    box-shadow: var(--shadow);
+}
+
+.calibration-help-popover strong { display: block; font-size: 0.78rem; }
+.calibration-help-popover p { margin: 4px 0 0; color: var(--deck-muted); font-size: 0.76rem; line-height: 1.35; }
+.calibration-help-popover .icon-button { position: absolute; top: 5px; right: 5px; width: 24px; height: 24px; }
+
+@supports (top: anchor(bottom)) {
+    .calibration-help-popover {
+        inset: auto;
+        top: anchor(bottom);
+        right: anchor(right);
+        margin-top: 8px;
+        transform: none;
+    }
+}
