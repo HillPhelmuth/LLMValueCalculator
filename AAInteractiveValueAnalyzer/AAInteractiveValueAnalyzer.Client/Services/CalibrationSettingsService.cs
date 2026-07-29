@@ -27,7 +27,7 @@ public sealed class CalibrationSettingsService(CalibrationProfileProvider profil
 
         try
         {
-            var stored = await jsRuntime.InvokeAsync<string?>("aaInteractiveValueAnalyzer.getLocalStorage", StorageKey);
+            var stored = await jsRuntime.InvokeAsync<string?>("aaInteractiveValueAnalyzer.getLocalStorage", cancellationToken, new object?[] { StorageKey });
             if (string.IsNullOrWhiteSpace(stored)) return;
 
             var overrides = JsonSerializer.Deserialize<CalibrationOverrides>(stored);
