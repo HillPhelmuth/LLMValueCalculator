@@ -86,6 +86,9 @@ else if (ActiveModalResult is not null)
     </a>
     <nav class="command-actions" aria-label="Analyzer actions">
         <a class="command-link" href="/intro-info">How it works</a>
+        <button type="button" class="command-button secondary" @onclick="OpenCalibrationEditor">
+            Advanced calibration
+        </button>
         <button type="button" class="command-button secondary" disabled="@IsAnalyzing" @onclick="Update">
             @(IsAnalyzing ? "Calculating..." : "Refresh")
         </button>
@@ -145,6 +148,10 @@ else if (ActiveModalResult is not null)
 @if (Summary.CalibrationWarning is not null)
 {
     <div class="compact-callout" role="status">@Summary.CalibrationWarning</div>
+}
+@if (Summary.UsesCalibrationOverrides)
+{
+    <div class="compact-callout" role="status">Local calibration overrides are active for these results.</div>
 }
 
 <div class="dense-form-grid two-up top-controls">
@@ -504,6 +511,8 @@ else if (ActiveModalResult is not null)
     </div>
 </details>
 
+<AdvancedCalibrationEditor IsOpen="IsCalibrationEditorOpen" OnClose="CloseCalibrationEditor" OnCalibrationChanged="Update" />
+
 <div class="results-column">
 <section class="panel recommendations-panel">
     <div class="section-heading split compact-heading">
@@ -646,7 +655,7 @@ else if (ActiveModalResult is not null)
                                     class="sort-header-button num @(RecommendationSort.ColumnKey == "direct" ? "active" : null)"
                                     aria-label="Sort recommendations by direct cost per 1000 tasks"
                                     @onclick='() => ToggleSort(true, "direct")'>
-                                <span>Direct/1k</span>
+                                <span>Cost/1k</span>
                                 <span class="sort-indicator">@GetSortIndicator(RecommendationSort, "direct")</span>
                             </button>
                         </th>

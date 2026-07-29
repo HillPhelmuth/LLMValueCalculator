@@ -1,0 +1,76 @@
+.calibration-backdrop { z-index: 50; }
+.calibration-drawer { z-index: 51; }
+
+.calibration-panel {
+    display: flex;
+    flex-direction: column;
+}
+
+.calibration-panel .calibration-profile-status {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.calibration-profile-status span,
+.calibration-footnote,
+.curve-range span,
+.curve-tail,
+.calibration-section .compact-field small {
+    color: var(--deck-muted);
+    font-size: 0.75rem;
+}
+
+.calibration-panel .compact-field > .field-label-row { background: var(--deck-surface); }
+
+.curve-table {
+    overflow: hidden;
+    border: 1px solid var(--deck-border);
+    border-radius: 10px;
+}
+
+.curve-table-header,
+.curve-table-row {
+    display: grid;
+    grid-template-columns: minmax(118px, 1.25fr) minmax(88px, 0.8fr) minmax(88px, 0.8fr) 34px;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+}
+
+.curve-table-header {
+    color: var(--deck-muted);
+    background: var(--deck-surface-raised);
+    font-size: 0.68rem;
+    font-weight: 750;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.curve-table-row {
+    border-top: 1px solid var(--deck-border);
+    background: var(--deck-bg);
+}
+
+.curve-range {
+    display: grid;
+    gap: 2px;
+}
+
+.curve-range strong { color: var(--deck-text); font-size: 0.8rem; }
+.curve-table-row .compact-field input { min-height: 36px; padding: 11px 8px 3px; }
+.curve-table-row .compact-field small { margin-top: 2px; }
+.curve-row-action { text-align: right; }
+.curve-row-action .icon-button { width: 30px; height: 30px; }
+
+.calibration-add-segment { margin-top: 10px; }
+.calibration-footnote { margin: 8px 0 0; }
+.calibration-error { margin: 6px 0 0; color: var(--deck-danger); font-size: 0.78rem; }
+.invalid-calibration-field input { border-color: var(--deck-danger) !important; }
+
+@media (max-width: 520px) {
+    .calibration-panel .calibration-profile-status { display: grid; }
+    .curve-table { overflow-x: auto; }
+    .curve-table-header, .curve-table-row { min-width: 440px; }
+}

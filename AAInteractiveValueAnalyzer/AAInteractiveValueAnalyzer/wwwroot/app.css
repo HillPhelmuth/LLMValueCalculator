@@ -1617,6 +1617,7 @@ body:has(.dense-analyzer) {
     background: var(--deck-surface);
     box-shadow: -24px 0 70px rgba(0, 0, 0, 0.38);
     animation: deck-drawer-in 180ms ease-out;
+    scrollbar-width: thin;
 }
 
 @keyframes deck-drawer-in {

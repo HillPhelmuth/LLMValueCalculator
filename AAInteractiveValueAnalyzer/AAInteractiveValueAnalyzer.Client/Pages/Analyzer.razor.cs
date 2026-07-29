@@ -32,6 +32,7 @@ public partial class Analyzer
     private bool IsAnalyzing { get; set; }
     private string? AnalysisError { get; set; }
     private bool _analysisPending;
+    private bool IsCalibrationEditorOpen { get; set; }
 
     [Inject]
     private IJSRuntime JsRuntime { get; set; } = null!;
@@ -117,6 +118,10 @@ public partial class Analyzer
         ComparisonFilter = ComparisonEligibilityFilter.All;
         await Update();
     }
+
+    private void OpenCalibrationEditor() => IsCalibrationEditorOpen = true;
+
+    private void CloseCalibrationEditor() => IsCalibrationEditorOpen = false;
 
     private async Task ApplyCategoryDefaults()
     {

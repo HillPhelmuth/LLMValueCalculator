@@ -72,7 +72,13 @@ app.MapGet("api/models", async () =>
     response.Models = response.Models.DistinctBy(x => x.Id).ToList();
 #if DEBUG
     var json = JsonSerializer.Serialize(response, new JsonSerializerOptions { WriteIndented = true });
-    File.WriteAllText($@"C:\Users\adamh\source\repos\AAInteractiveValueAnalyzer\AAInteractiveValueAnalyzer\AAOutput\ArtificialAnalysisModelsWithCostPerTask-{DateTime.Now:yyyyMMddHHmmss}.json", json);
+    var basePath = @"C:\Users\adamh\source\repos\LLMValueCalculator";
+    var aaOutputPath = $@"{basePath}\AAInteractiveValueAnalyzer\AAInteractiveValueAnalyzer\AAOutput";
+    if (!Directory.Exists(aaOutputPath))
+    {
+        Directory.CreateDirectory(aaOutputPath);
+    }
+    File.WriteAllText($@"{aaOutputPath}\ArtificialAnalysisModelsWithCostPerTask-{DateTime.Now:yyyyMMddHHmmss}.json", json);
 #endif
 
     return Results.Ok(response);

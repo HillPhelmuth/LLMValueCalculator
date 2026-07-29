@@ -4,6 +4,7 @@ public sealed class RecommendationResult
 {
     public string CalibrationProfileVersion { get; init; } = string.Empty;
     public string CalibrationProfileHash { get; init; } = string.Empty;
+    public bool UsesCalibrationOverrides { get; init; }
     public required ModelProfile Model { get; init; }
     public required string CapabilityIndexName { get; init; }
     public double RawCapabilityScore { get; init; }
@@ -42,6 +43,7 @@ public sealed class AnalysisSummary
 {
     public string CalibrationProfileVersion { get; init; } = string.Empty;
     public string CalibrationProfileHash { get; init; } = string.Empty;
+    public bool UsesCalibrationOverrides { get; init; }
     public bool UsedCalibrationFallback { get; init; }
     public string? CalibrationWarning { get; init; }
     public double EffectiveDifficulty { get; init; }

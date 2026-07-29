@@ -1,0 +1,17 @@
+<button type="button" class="icon-button help-button" title="Explain @Title" aria-label="Explain @Title" popovertarget="@Id" style="anchor-name: --@Id;">?</button>
+<div id="@Id" popover="auto" class="calibration-help-popover" role="tooltip" style="position-anchor: --@Id;">
+    <strong>@Title</strong>
+    <p>@Description</p>
+    <button type="button" class="icon-button" title="Close help" aria-label="Close help" popovertarget="@Id" popovertargetaction="hide">×</button>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Id { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string Description { get; set; } = string.Empty;
+}

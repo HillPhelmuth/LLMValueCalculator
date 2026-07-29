@@ -40,6 +40,15 @@
                 }
 
                 window.location.assign(fallbackUrl || "/");
+            },
+            getLocalStorage: function (key) {
+                return window.localStorage.getItem(key);
+            },
+            setLocalStorage: function (key, value) {
+                window.localStorage.setItem(key, value);
+            },
+            removeLocalStorage: function (key) {
+                window.localStorage.removeItem(key);
             }
         };
     </script>
