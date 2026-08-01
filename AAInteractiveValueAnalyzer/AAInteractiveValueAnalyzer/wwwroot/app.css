@@ -353,7 +353,7 @@ h3 {
 
 .compact-field span {
     color: #2f2f2d;
-    font-size: 0.70rem;
+    font-size: 0.60rem;
     font-weight: 750;
     text-transform: uppercase;
 }
@@ -1856,3 +1856,10 @@ body:has(.dense-analyzer) {
         grid-template-columns: 1fr;
     }
 }
+.currencyinput {
+    border: 1px inset #ccc;
+}
+
+    .currencyinput input {
+        border: 0;
+    }

@@ -442,10 +442,16 @@ public class RecommendationEngine
         var attempts = inputs.RetriesAllowed ? Math.Clamp(inputs.MaxAttempts, 1, 5) : 1;
         var targetSuccess = Math.Clamp(inputs.RequiredSuccessRate / 100d, 0, 1);
         var allowedCriticalFailure = Math.Clamp(inputs.AllowedCriticalFailureRate / 100d, 0, 1);
+        var workloadCostMultiplier = WorkloadCostEstimator.Estimate(inputs);
+        var manualCostMultiplier = Math.Max(0, inputs.CostMultiplier);
+        var effectiveCostMultiplier = workloadCostMultiplier * manualCostMultiplier;
 
         var usesCalibrationOverrides = calibrationSettings?.HasOverrides ?? false;
         var results = (await modelCatalog.GetLatestModelData())
-            .Select(model => AnalyzeModel(model, inputs, difficulty, effectiveTau, attempts, targetSuccess, allowedCriticalFailure, criticalFailureExposureMultiplier, calibrationProfile, usesCalibrationOverrides))
+            .Select(model => AnalyzeModel(
+                model, inputs, difficulty, effectiveTau, attempts, targetSuccess, allowedCriticalFailure,
+                criticalFailureExposureMultiplier, manualCostMultiplier, workloadCostMultiplier,
+                effectiveCostMultiplier, calibrationProfile, usesCalibrationOverrides))
             .OrderByDescending(x => x.IsEligible)
             .ThenByDescending(x => x.ExpectedValuePerTaskUsd)
             .ThenByDescending(x => x.EffectiveSuccessRate)
@@ -463,6 +469,9 @@ public class RecommendationEngine
             CalibrationWarning = calibrationSettings?.Warning,
             EffectiveDifficulty = difficulty,
             Tau = effectiveTau,
+            ManualCostMultiplier = manualCostMultiplier,
+            WorkloadCostMultiplier = workloadCostMultiplier,
+            EffectiveCostMultiplier = effectiveCostMultiplier,
             DifficultyFactors = difficultyFactors,
             GuardrailFactors = guardrailFactors,
             Results = results,
@@ -483,6 +492,9 @@ public class RecommendationEngine
         double targetSuccess,
         double allowedCriticalFailure,
         double criticalFailureExposureMultiplier,
+        double manualCostMultiplier,
+        double workloadCostMultiplier,
+        double effectiveCostMultiplier,
         CalibrationProfile profile,
         bool usesCalibrationOverrides)
     {
@@ -518,7 +530,7 @@ public class RecommendationEngine
         // retry on the same task), so the ledger charged optimistic cost against
         // correlation-discounted success -- two different retry models on the two sides.
         var expectedAttempts = ExpectedAttempts(capabilitySuccess, attempts, profile);
-        var baseModelCost = model.CostPerAaTaskUsd.GetValueOrDefault() * Math.Max(0, inputs.CostMultiplier);
+        var baseModelCost = model.CostPerAaTaskUsd.GetValueOrDefault() * effectiveCostMultiplier;
         var expectedModelCost = model.HasCostData ? baseModelCost * expectedAttempts * batchSize : double.NaN;
         var expectedReviewCost = Math.Max(0, inputs.HumanReviewCostUsd) * batchSize;
         var expectedRetryOverhead = Math.Max(0, expectedAttempts - 1) * Math.Max(0, inputs.OperationalRetryCostUsd) * batchSize;
@@ -567,16 +579,18 @@ public class RecommendationEngine
         var successPerDollar = model.HasCostData ? effectiveSuccess / Math.Max(expectedTotalDirectCost, 0.000001) * batchSize : 0;
 
         // NEW: latency. End-to-end seconds are the only cross-comparable latency figure (TTFT/TTFA
-        // diverge only by whether reasoning tokens are streamed, not by real work timing). Expected
-        // latency scales with expected attempts: a model that needs two tries waits twice. Latency is
-        // a cost, not a difficulty term -- it does not change whether the model *can* do the task --
+        // diverge only by whether reasoning tokens are streamed, not by real work timing). The same
+        // effective model-cost factor that estimates relative token cost also scales latency: a
+        // smaller task requires fewer output/reasoning tokens and should complete sooner. Expected
+        // latency then scales with expected attempts, so a model that needs two tries waits twice. Latency is a
+        // cost, not a difficulty term -- it does not change whether the model *can* do the task --
         // so it lives here in the value calculation, parallel to human-review cost.
         // CHANGED: missing latency data now reports NaN, matching the missing-cost sentinel,
         // instead of 0 -- a rendered "0.0s" reads as "instant and free". The EV sum still charges
         // 0 in that case (latencyCostCharged): when latency is priced or capped the model is
         // excluded below anyway, and when it is not, zero is the honest charge.
         var expectedLatencySeconds = model.HasLatencyData
-            ? model.EndToEndResponseSeconds!.Value * expectedAttempts
+            ? model.EndToEndResponseSeconds!.Value * effectiveCostMultiplier * expectedAttempts
             : double.NaN;
         var expectedLatencyCost = model.HasLatencyData
             ? expectedLatencySeconds * Math.Max(0, inputs.LatencyCostPerSecondUsd) * batchSize
@@ -588,34 +602,41 @@ public class RecommendationEngine
         // value). The good-share is the user's base assumption tilted by this model's headroom above
         // the bar: singleAttemptSuccess - 0.5 lands in [-0.5, +0.5], so a comfortable model realizes
         // more good outcomes than a marginal one with the same pass rate. This is what makes the
-        // feature move rankings rather than scale every model identically. Acceptable value is floored
+        // feature move rankings rather than scale every model identically. The two configured values
+        // are dollars per 1,000 outcomes of their respective success tier. Acceptable value is floored
         // at 0 and not allowed to exceed the good value (acceptable is by definition no better than
-        // good); the resulting blended value is what each success is actually worth.
+        // good); the resulting blend is dollars per 1,000 successful outcomes.
         var baseGoodShare = Math.Clamp(inputs.GoodOutcomeShareOfSuccesses / 100d, 0, 1);
         var realizedGoodShare = Math.Clamp(baseGoodShare + qualityHeadroom * profile.QualityShareDifficultyTilt, 0, 1);
-        var goodValue = Math.Max(0, inputs.BusinessValuePerSuccessUsd);
-        var acceptableValue = Math.Clamp(inputs.AcceptableValuePerSuccessUsd, 0, goodValue);
-        var blendedValuePerSuccess = goodValue * realizedGoodShare + acceptableValue * (1 - realizedGoodShare);
+        var goodValuePerThousandSuccesses = Math.Max(0, inputs.BusinessValuePerThousandSuccessesUsd);
+        var acceptableValuePerThousandSuccesses = Math.Clamp(
+            inputs.AcceptableValuePerThousandSuccessesUsd,
+            0,
+            goodValuePerThousandSuccesses);
+        var blendedValuePerThousandSuccesses =
+            goodValuePerThousandSuccesses * realizedGoodShare
+            + acceptableValuePerThousandSuccesses * (1 - realizedGoodShare);
 
         // Expected value retains the asymmetric framing: business value of a success minus direct
         // cost minus latency cost minus the cost of failure. Failure cost is now split: the critical
-        // share is charged at FailureCostUsd (the expensive tail), the remaining benign share at
-        // BenignFailureCostUsd (caught/retried, usually cheap). criticalFailureRate already carries
-        // every guardrail multiplier (silent-failure, deterministic validation, human approval, the
-        // category exposure terms), so those controls now move EV directly, not just the advisory
+        // share is charged per incident at FailureCostUsd (the expensive tail), while the remaining
+        // benign share is charged from a dollars-per-1,000-failures input. criticalFailureRate already
+        // carries every guardrail multiplier (silent-failure, deterministic validation, human approval,
+        // the category exposure terms), so those controls now move EV directly, not just the advisory
         // downside metric. The benign rate is whatever failure mass is left after the critical part;
         // the cap on criticalFailureRate above guarantees this is non-negative, so the Max(0, ...) is
-        // belt-and-suspenders.
+        // belt-and-suspenders. Since the analysis batch is 1,000 tasks, a per-1,000 outcome amount is
+        // prorated directly by its outcome rate rather than multiplied by batchSize again.
         var benignFailureRate = Math.Max(0, (1 - effectiveSuccess) - criticalFailureRate);
         var expectedCriticalFailureCost = model.HasCostData
             ? Math.Max(0, inputs.FailureCostUsd) * criticalFailureRate * batchSize
             : double.NaN;
         var expectedBenignFailureCost = model.HasCostData
-            ? Math.Max(0, inputs.BenignFailureCostUsd) * benignFailureRate * batchSize
+            ? Math.Max(0, inputs.BenignFailureCostPerThousandFailuresUsd) * benignFailureRate
             : double.NaN;
 
         var expectedValue = model.HasCostData
-            ? blendedValuePerSuccess * effectiveSuccess * batchSize
+            ? blendedValuePerThousandSuccesses * effectiveSuccess
               - expectedTotalDirectCost
               - latencyCostCharged
               - expectedCriticalFailureCost
@@ -683,13 +704,16 @@ public class RecommendationEngine
             CriticalFailureRate = criticalFailureRate,
             Attempts = attempts,
             ExpectedAttempts = expectedAttempts,
+            ManualCostMultiplier = manualCostMultiplier,
+            WorkloadCostMultiplier = workloadCostMultiplier,
+            EffectiveCostMultiplier = effectiveCostMultiplier,
             ExpectedModelCostUsd = expectedModelCost,
             ExpectedReviewCostUsd = expectedReviewCost,
             ExpectedRetryOverheadUsd = expectedRetryOverhead,
             ExpectedTotalDirectCostUsd = expectedTotalDirectCost,
             CostPerSuccessfulTaskUsd = costPerSuccessfulTask,
             RealizedGoodOutcomeShare = realizedGoodShare,
-            BlendedValuePerSuccessUsd = blendedValuePerSuccess,
+            BlendedValuePerThousandSuccessesUsd = blendedValuePerThousandSuccesses,
             ExpectedValuePerTaskUsd = expectedValue,
             MonthlyExpectedValueUsd = monthlyExpectedValue,
             ExpectedCriticalFailureCostUsd = expectedCriticalFailureCost,

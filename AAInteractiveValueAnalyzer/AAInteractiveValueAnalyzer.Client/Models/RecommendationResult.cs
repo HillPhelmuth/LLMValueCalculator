@@ -16,13 +16,17 @@ public sealed class RecommendationResult
     public double CriticalFailureRate { get; init; }
     public int Attempts { get; init; }
     public double ExpectedAttempts { get; init; }
+    public double ManualCostMultiplier { get; init; }
+    public double WorkloadCostMultiplier { get; init; }
+    public double EffectiveCostMultiplier { get; init; }
     public double ExpectedModelCostUsd { get; init; }
     public double ExpectedReviewCostUsd { get; init; }
     public double ExpectedRetryOverheadUsd { get; init; }
     public double ExpectedTotalDirectCostUsd { get; init; }
     public double CostPerSuccessfulTaskUsd { get; init; }
     public double RealizedGoodOutcomeShare { get; init; }
-    public double BlendedValuePerSuccessUsd { get; init; }
+    /// <summary>Realized business value per 1,000 successes after blending good and acceptable outcomes.</summary>
+    public double BlendedValuePerThousandSuccessesUsd { get; init; }
 
     /// <summary>Expected value for the engine's 1,000-task analysis batch.</summary>
     public double ExpectedValuePerTaskUsd { get; init; }
@@ -48,6 +52,9 @@ public sealed class AnalysisSummary
     public string? CalibrationWarning { get; init; }
     public double EffectiveDifficulty { get; init; }
     public double Tau { get; init; }
+    public double ManualCostMultiplier { get; init; }
+    public double WorkloadCostMultiplier { get; init; }
+    public double EffectiveCostMultiplier { get; init; }
     public IReadOnlyList<string> DifficultyFactors { get; init; } = [];
     public IReadOnlyList<string> GuardrailFactors { get; init; } = [];
     public IReadOnlyList<RecommendationResult> Results { get; init; } = [];

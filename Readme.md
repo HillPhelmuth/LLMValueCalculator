@@ -41,7 +41,7 @@ The output should be treated as a planning estimate. Production decisions should
 
 6. Enter economics.
 
-   Business value per success, failure cost, human review cost, operational retry cost, monthly volume in 1,000-task batches, and cost multiplier determine expected value and monthly impact.
+   Business value per 1,000 full successes, value per 1,000 partial successes, cost per 1,000 benign failures, critical-failure cost per incident, human review cost, operational retry cost, monthly volume in 1,000-task batches, and the manual AA adjustment determine expected value and monthly impact. The manual adjustment multiplies the automatic workload-cost factor.
 
 7. Compare recommendations.
 
@@ -63,6 +63,8 @@ effective difficulty =
 
 Workload adjustments include context size/noise, reasoning depth, domain specificity, tool use, verifiability, and output constraints.
 
+Model cost is also workload-aware. Context, reasoning depth, and tool use feed a log-linear factor fitted to median benchmark-cost shares from the Artificial Analysis Intelligence Index. Each share is normalized by its benchmark's Index weight, then the fitted factor is clamped to the observed range. Domain specificity, verifiability, and output constraints remain success/difficulty inputs rather than unsupported direct-cost assumptions. The manual AA adjustment multiplies this automatic factor, which also scales expected end-to-end latency before retries are applied.
+
 Guardrails can reduce modeled difficulty or critical-failure exposure when they make failures easier to detect or recover from. Examples include representative eval sets, deterministic validation, strict schema output, supplied domain context, and human approval for high-risk actions.
 
 The model comparison then estimates:
@@ -83,11 +85,10 @@ Expected value is modeled as:
 
 ```text
 expected value per 1000 tasks =
-   1000 * (
-      value from successful outcomes
-      - expected failure cost
-      - expected direct cost
-   )
+   blended value per 1000 successes * effective success rate
+   - critical failure cost per incident * critical failure rate * 1000
+   - benign failure cost per 1000 failures * benign failure rate
+   - direct and latency costs per 1000 tasks
 ```
 
 Monthly expected value multiplies that per-1,000-task estimate by monthly volume, where monthly volume is entered in 1,000-task batches.
