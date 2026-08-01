@@ -1,6 +1,4 @@
-﻿using AAInteractiveValueAnalyzer.Client.Services;
-
-namespace AAInteractiveValueAnalyzer.Client.Models;
+﻿namespace AAInteractiveValueAnalyzer.Client.Models;
 
 public static class AnalyzerHelper
 {
@@ -58,23 +56,23 @@ public static class AnalyzerHelper
         ["deterministic-validation"] = new FieldHelp(
             "Deterministic validation",
             "Signals that outputs can be checked programmatically instead of only by human review.",
-            $"Multiplies the modeled critical-failure rate by {RecommendationEngine.DeterministicValidationCriticalMultiplier:0.##}, reducing expected critical-failure cost and helping models satisfy the critical-failure threshold."),
+            "Reduces the modeled critical-failure rate, expected critical-failure cost, and the risk constraint used for eligibility."),
         ["strict-structure"] = new FieldHelp(
             "Strict structure",
             "Requires extraction output to match a schema or rigid format.",
-            $"When paired with deterministic validation for Extraction, multiplies critical-failure exposure by {RecommendationEngine.ExtractionStrictValidationCriticalMultiplier:0.##}."),
+            "When paired with deterministic validation for Extraction, further reduces critical-failure exposure."),
         ["silent-failure-risk"] = new FieldHelp(
             "Silent failure risk",
             "Captures tasks where wrong answers may look plausible and escape easy detection.",
-            $"Multiplies the critical share of failures by {RecommendationEngine.SilentFailureCriticalShareMultiplier:0.##}, increasing expected critical-failure cost and tightening the effective risk constraint."),
+            "Increases the critical share of failures, expected critical-failure cost, and the effective risk constraint."),
         ["customer-facing"] = new FieldHelp(
             "Customer-facing",
             "Marks outputs that are directly visible to end users or customers.",
-            $"Multiplies the critical share of failures by {RecommendationEngine.CustomerFacingCriticalShareMultiplier:0.##} to represent the greater exposure of errors delivered to customers."),
+            "Increases the critical share of failures to represent the greater exposure of errors delivered to customers."),
         ["human-approval"] = new FieldHelp(
             "Human approval",
             "Requires a person to approve risky actions before execution.",
-            $"Multiplies the modeled critical-failure rate by {RecommendationEngine.HumanApprovalCriticalMultiplier:0.##}, reducing expected critical-failure cost and helping models satisfy the critical-failure threshold."),
+            "Reduces the modeled critical-failure rate, expected critical-failure cost, and the risk constraint used for eligibility."),
         ["retries-allowed"] = new FieldHelp(
             "Retries allowed",
             "Determines whether the model can make more than one attempt.",
@@ -92,29 +90,29 @@ public static class AnalyzerHelper
             "Defines how much of overall failure probability counts as critical.",
             "Raises or lowers the modeled critical-failure rate without changing success probability."),
         ["aa-task-multiplier"] = new FieldHelp(
-            "AA task multiplier",
-            "Scales the Artificial Analysis cost before it is projected to a 1,000-task batch.",
-            "Multiplies the model-cost input before expected model cost, direct cost, cost per 1,000 successful tasks, and expected value are computed."),
+            "Manual Art.Analysis adjustment",
+            "Applies a manual adjustment after the automatic workload cost factor fitted from Artificial Analysis benchmark medians.",
+            "Multiplies the automatic factor derived from Context, Reasoning, and Tool use before expected model cost, direct cost, cost per 1,000 successful tasks, and expected value are computed."),
         ["value-per-success"] = new FieldHelp(
-            "Value per good success",
-            "Business value captured by a fully-correct success. A passing task that is only degraded-but-acceptable is worth the lower acceptable value instead, so this is the upper end of the per-success value range.",
-            "Sets the full-value end of the partial-credit blend. Raises expected value through the share of passes that land in the good tier, which rises with how comfortably a model clears the task."),
+            "Value per 1,000 full successes",
+            "Business value captured by 1,000 full successes. A partial success uses the lower partial-success value instead, so this is the upper end of the value range.",
+            "Sets the full-value end of the partial-credit blend. For a 1,000-task batch, the blended per-1,000-success value is prorated by the effective success rate rather than charged once per successful task."),
         ["acceptable-value"] = new FieldHelp(
-            "Acceptable value per success",
-            "Business value captured by a degraded-but-acceptable pass -- usable output that is not fully correct, as is common in summarization, research, or extraction that erodes rather than fails cleanly. Defaults to half the good value.",
-            "Sets the lower end of the partial-credit blend. Each success is worth a mix of the good and acceptable values weighted by the realized good-share, so raising this lifts the value of every model and narrows the gap between strong and marginal ones."),
+            "Value per 1,000 partial successes",
+            "Business value captured by 1,000 partial successes -- usable outputs that do not qualify as full successes, as is common in summarization, research, or extraction that erodes rather than fails cleanly. Defaults to half the full-success value.",
+            "Sets the lower end of the partial-credit blend. The full- and partial-success values are weighted by the realized full-success share, then prorated by the model's effective success rate."),
         ["good-share"] = new FieldHelp(
-            "Good outcome share",
-            "The baseline percentage of passes that are fully correct rather than merely acceptable. The realized share per model is tilted around this by how far the model clears the difficulty bar, so comfortable models realize more good outcomes than marginal ones with the same pass rate.",
-            "At 100 every pass is treated as fully good and value reduces to the flat value-per-success model. Below 100 it blends in the acceptable value and lets model headroom move the realized quality, which is what makes partial credit affect the ranking."),
+            "Full success share",
+            "The baseline percentage of successful outcomes that count as full successes rather than partial successes. This is modified higher or lower based on how far the model clears the difficulty bar, so comfortable models realize more full successes than marginal ones with the same pass rate.",
+            "At 100 every successful outcome is treated as a full success and the blend equals the value per 1,000 full successes. Below 100, partial successes receive partial credit and model headroom can change the realized blend."),
         ["failure-cost"] = new FieldHelp(
             "Critical failure cost",
             "Economic loss assigned to a critical (genuinely harmful) failed task -- a wrong answer that reached a customer, an irreversible action, or a silent error that propagated. This is the expensive tail of failure.",
             "Charged against expected value at the modeled critical-failure rate, which every guardrail (silent-failure risk, deterministic validation, human approval, agentic exposure) acts on. Also drives the worst-case failure cost metric."),
         ["benign-failure-cost"] = new FieldHelp(
-            "Benign failure cost",
-            "Economic loss assigned to a non-critical failed task -- one that was caught and retried or otherwise thrown away cheaply. Defaults equal to critical failure cost; lower it to express that ordinary failures are inexpensive.",
-            "Charged against expected value at the remaining (non-critical) failure rate. When it equals critical failure cost, total failure cost is the old single-term model; lowering it rewards models whose failures are mostly benign."),
+            "Cost per 1,000 benign failures",
+            "Economic loss assigned to 1,000 non-critical failed tasks -- failures that were caught and retried or otherwise discarded cheaply.",
+            "For a 1,000-task batch, this amount is prorated by the remaining non-critical failure rate. Critical failure cost remains a per-incident input and is calculated separately."),
         ["review-cost"] = new FieldHelp(
             "Review cost",
             "Human review cost applied to each task.",
@@ -130,11 +128,11 @@ public static class AnalyzerHelper
         ["latency-cost"] = new FieldHelp(
             "Latency cost per second",
             "The dollar value of one second of end-to-end wait per task. Set this for interactive or customer-facing work where a user is blocked while the model responds; leave it at 0 for batch work where nothing waits on any single task.",
-            "Multiplied by each model's expected end-to-end latency and expected attempts, then subtracted from expected value. A slower model loses more value, and a model that retries waits more than once. Models with no published latency data are excluded while this is above 0 rather than treated as instant."),
+            "Multiplied by each model's end-to-end latency after the automatic workload factor and manual AA adjustment, then by expected attempts before it is subtracted from expected value. A smaller combined factor lowers both model cost and expected latency; retries increase both. Models with no published latency data are excluded while this is above 0 rather than treated as instant."),
         ["max-latency"] = new FieldHelp(
             "Maximum latency",
             "The longest acceptable end-to-end response time per task, in seconds. Leave blank for no limit.",
-            "Acts as a hard eligibility threshold, like required success: a model whose expected latency exceeds this is excluded. Models with no published latency data are excluded while a limit is set, rather than passing the gate by default.")
+            "Acts as a hard eligibility threshold, like required success: a model whose cost-adjusted expected latency exceeds this is excluded. Models with no published latency data are excluded while a limit is set, rather than passing the gate by default.")
     };
 
     public static readonly IReadOnlyList<TableColumn> RecommendationColumns =

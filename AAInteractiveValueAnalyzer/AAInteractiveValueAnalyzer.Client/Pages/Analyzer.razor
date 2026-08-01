@@ -391,7 +391,7 @@ else if (ActiveModalResult is not null)
             <input type="range" min="0" max="100" step="0.1" @bind="Inputs.AllowedCriticalFailureRate" @bind:after="Update"/>
         </div>
 
-        <div class="compact-range">
+      @*   <div class="compact-range">
             <div class="range-label inline-label">
                 <div class="field-label-row">
                     <span>Critical share of failures</span>
@@ -400,15 +400,19 @@ else if (ActiveModalResult is not null)
                 <strong>@Inputs.CriticalFailureShareOfFailures.ToString("0")%</strong>
             </div>
             <input type="range" min="0" max="100" step="1" @bind="Inputs.CriticalFailureShareOfFailures" @bind:after="Update"/>
-        </div>
+        </div> *@
 
         <div class="compact-range">
             <div class="range-label inline-label">
                 <div class="field-label-row">
-                    <span>AA task multiplier</span>
-                    <button type="button" class="icon-button help-button" title="Explain AA task multiplier" aria-label='@GetFieldHelpAriaLabel("aa-task-multiplier")' @onclick='() => ShowFieldHelp("aa-task-multiplier")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                    <span>Manual AA adjustment</span>
+                    <button type="button" class="icon-button help-button" title="Explain manual AA adjustment" aria-label='@GetFieldHelpAriaLabel("aa-task-multiplier")' @onclick='() => ShowFieldHelp("aa-task-multiplier")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
                 </div>
-                <strong>@Inputs.CostMultiplier.ToString("0.0")x</strong>
+                <div class="workload-cost-factors" aria-label="Cost adjustment factors">
+                    <strong>Manual @Inputs.CostMultiplier.ToString("0.0")x</strong>
+                    <span>Auto @Summary.WorkloadCostMultiplier.ToString("0.000")x</span>
+                    <span>Combined @Summary.EffectiveCostMultiplier.ToString("0.000")x</span>
+                </div>
             </div>
             <input type="range" min="0.1" max="10" step="0.1" @bind="Inputs.CostMultiplier" @bind:after="Update"/>
         </div>
@@ -417,28 +421,28 @@ else if (ActiveModalResult is not null)
     <div class="dense-form-grid three-up">
         <label class="compact-field">
             <div class="field-label-row">
-                <span>$ per success</span>
-                <button type="button" class="icon-button help-button" title="Explain value per success" aria-label='@GetFieldHelpAriaLabel("value-per-success")' @onclick='() => ShowFieldHelp("value-per-success")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                <span>$ / 1k full success</span>
+                <button type="button" class="icon-button help-button" title="Explain value per 1,000 full successes" aria-label='@GetFieldHelpAriaLabel("value-per-success")' @onclick='() => ShowFieldHelp("value-per-success")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
             </div>
-            <input type="number" min="0" step="0.25" @bind="Inputs.BusinessValuePerSuccessUsd" @bind:after="Update"/>
+            <input type="number" min="0" step="5" @bind="Inputs.BusinessValuePerThousandSuccessesUsd" @bind:after="Update"/>
         </label>
 
         <label class="compact-field">
             <div class="field-label-row">
-                <span>Acceptable $</span>
-                <button type="button" class="icon-button help-button" title="Explain acceptable value per success" aria-label='@GetFieldHelpAriaLabel("acceptable-value")' @onclick='() => ShowFieldHelp("acceptable-value")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                <span>$ / 1k partial success</span>
+                <button type="button" class="icon-button help-button" title="Explain value per 1,000 partial successes" aria-label='@GetFieldHelpAriaLabel("acceptable-value")' @onclick='() => ShowFieldHelp("acceptable-value")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
             </div>
-            <input type="number" min="0" step="0.25" @bind="Inputs.AcceptableValuePerSuccessUsd" @bind:after="Update"/>
+            <input type="number" min="0" step="5" class="currency-input" @bind="Inputs.AcceptableValuePerThousandSuccessesUsd" @bind:after="Update" />
         </label>
 
-        <label class="compact-field">
+       @*  <label class="compact-field">
             <div class="field-label-row">
-                <span>Good share %</span>
-                <button type="button" class="icon-button help-button" title="Explain good outcome share" aria-label='@GetFieldHelpAriaLabel("good-share")' @onclick='() => ShowFieldHelp("good-share")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                <span>Full success share %</span>
+                <button type="button" class="icon-button help-button" title="Explain full success share" aria-label='@GetFieldHelpAriaLabel("good-share")' @onclick='() => ShowFieldHelp("good-share")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
             </div>
             <input type="number" min="0" max="100" step="1" @bind="Inputs.GoodOutcomeShareOfSuccesses" @bind:after="Update"/>
         </label>
-
+ *@
         <label class="compact-field">
             <div class="field-label-row">
                 <span>Critical fail $</span>
@@ -449,10 +453,10 @@ else if (ActiveModalResult is not null)
 
         <label class="compact-field">
             <div class="field-label-row">
-                <span>Benign fail $</span>
-                <button type="button" class="icon-button help-button" title="Explain benign failure cost" aria-label='@GetFieldHelpAriaLabel("benign-failure-cost")' @onclick='() => ShowFieldHelp("benign-failure-cost")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
+                <span>$ / 1k benign failures</span>
+                <button type="button" class="icon-button help-button" title="Explain cost per 1,000 benign failures" aria-label='@GetFieldHelpAriaLabel("benign-failure-cost")' @onclick='() => ShowFieldHelp("benign-failure-cost")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
             </div>
-            <input type="number" min="0" step="0.25" @bind="Inputs.BenignFailureCostUsd" @bind:after="Update"/>
+            <input type="number" min="0" step="5" @bind="Inputs.BenignFailureCostPerThousandFailuresUsd" @bind:after="Update"/>
         </label>
 
         <label class="compact-field">

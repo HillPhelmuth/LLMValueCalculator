@@ -102,3 +102,16 @@ details[open] .calculation-audit-chevron {
     padding: 0;
     flex: 0 0 auto;
 }
+
+.workload-cost-factors {
+    display: grid;
+    gap: 0.1rem;
+    justify-items: end;
+    font-size: 0.72rem;
+    line-height: 1.2;
+}
+
+.workload-cost-factors span {
+    color: var(--muted);
+    font-weight: 600;
+}

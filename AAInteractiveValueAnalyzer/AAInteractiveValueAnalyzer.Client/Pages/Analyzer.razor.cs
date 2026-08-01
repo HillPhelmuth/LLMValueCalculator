@@ -614,7 +614,7 @@ public partial class Analyzer
 
     private static string BuildCostBreakdown(RecommendationResult item)
     {
-        return $"Model/1k {Currency(item.ExpectedModelCostUsd)} | Review/1k {Currency(item.ExpectedReviewCostUsd)} | Retry/1k {Currency(item.ExpectedRetryOverheadUsd)}";
+        return $"Auto {Number(item.WorkloadCostMultiplier, "0.000")}x × manual {Number(item.ManualCostMultiplier, "0.000")}x = {Number(item.EffectiveCostMultiplier, "0.000")}x | Model/1k {Currency(item.ExpectedModelCostUsd)} | Review/1k {Currency(item.ExpectedReviewCostUsd)} | Retry/1k {Currency(item.ExpectedRetryOverheadUsd)}";
     }
 
     private static IReadOnlyList<KeyValuePair<string, string>> BuildAdditionalMetrics(RecommendationResult item)
@@ -624,10 +624,13 @@ public partial class Analyzer
             new("Capability basis", $"{item.CapabilityIndexName}: {item.RawCapabilityScore:0.0}"),
             new("Single-attempt success", Percent(item.SingleAttemptSuccessRate)),
             new("Effective success", Percent(item.EffectiveSuccessRate)),
-            new("Realized good-outcome share", Percent(item.RealizedGoodOutcomeShare)),
-            new("Blended value / success", Currency(item.BlendedValuePerSuccessUsd)),
+            new("Realized full-success share", Percent(item.RealizedGoodOutcomeShare)),
+            new("Blended value / 1k successes", Currency(item.BlendedValuePerThousandSuccessesUsd)),
             new("Critical-failure rate", Percent(item.CriticalFailureRate, 2)),
             new("Expected attempts", Number(item.ExpectedAttempts, "0.00")),
+            new("Automatic workload cost factor", Number(item.WorkloadCostMultiplier, "0.000") + "x"),
+            new("Manual AA adjustment", Number(item.ManualCostMultiplier, "0.000") + "x"),
+            new("Combined model-cost factor", Number(item.EffectiveCostMultiplier, "0.000") + "x"),
             new("Expected model cost / 1k tasks", Currency(item.ExpectedModelCostUsd)),
             new("Expected review cost / 1k tasks", Currency(item.ExpectedReviewCostUsd)),
             new("Expected retry overhead / 1k tasks", Currency(item.ExpectedRetryOverheadUsd)),

@@ -31,13 +31,17 @@ public sealed class UseCaseInputs
 
     public double RequiredSuccessRate { get; set; } = 90;
     public double AllowedCriticalFailureRate { get; set; } = 1;
-    public double CriticalFailureShareOfFailures { get; set; } = 25;
+    public double CriticalFailureShareOfFailures { get; set; } = 20;
     public double CostMultiplier { get; set; } = 1;
-    public double BusinessValuePerSuccessUsd { get; set; } = 2;
-    public double AcceptableValuePerSuccessUsd { get; set; } = 1;
+    /// <summary>Business value of 1,000 fully-correct successful outcomes.</summary>
+    public double BusinessValuePerThousandSuccessesUsd { get; set; } = 500;
+
+    /// <summary>Business value of 1,000 degraded-but-acceptable successful outcomes.</summary>
+    public double AcceptableValuePerThousandSuccessesUsd { get; set; } = 100;
     public double GoodOutcomeShareOfSuccesses { get; set; } = 75;
-    public double FailureCostUsd { get; set; } = 10;
-    public double BenignFailureCostUsd { get; set; } = 0.25;
+    public double FailureCostUsd { get; set; } = 1;
+    /// <summary>Economic cost of 1,000 non-critical failed outcomes.</summary>
+    public double BenignFailureCostPerThousandFailuresUsd { get; set; } = 25;
     public double HumanReviewCostUsd { get; set; }
     public double OperationalRetryCostUsd { get; set; } = 0.02;
     public double MonthlyVolume { get; set; } = 10;
