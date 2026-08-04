@@ -41,11 +41,11 @@ The output should be treated as a planning estimate. Production decisions should
 
 6. Enter economics.
 
-   Business value per 1,000 full successes, value per 1,000 partial successes, cost per 1,000 benign failures, critical-failure cost per incident, human review cost, operational retry cost, monthly volume in 1,000-task batches, and the manual AA adjustment determine expected value and monthly impact. The manual adjustment multiplies the automatic workload-cost factor.
+   Business value per 1,000 full successes, value per 1,000 partial successes, cost per 1,000 benign failures, critical-failure cost per incident, human review cost, operational retry cost, and the manual AA adjustment determine expected value. The manual adjustment multiplies the automatic workload-cost factor.
 
 7. Compare recommendations.
 
-   The analyzer highlights eligible models and shows expected success, critical-failure rate, expected attempts, direct cost per 1,000 tasks, cost per 1,000 successful tasks, success per dollar, expected value per 1,000 tasks, and monthly expected value.
+   The analyzer highlights eligible models and shows expected success, critical-failure rate, expected attempts, direct cost per 1,000 tasks, cost per 1,000 successful tasks, success per dollar, and expected value per 1,000 tasks.
 
 ## Methodology
 
@@ -90,8 +90,6 @@ expected value per 1000 tasks =
    - benign failure cost per 1000 failures * benign failure rate
    - direct and latency costs per 1000 tasks
 ```
-
-Monthly expected value multiplies that per-1,000-task estimate by monthly volume, where monthly volume is entered in 1,000-task batches.
 
 ## Task Categories
 

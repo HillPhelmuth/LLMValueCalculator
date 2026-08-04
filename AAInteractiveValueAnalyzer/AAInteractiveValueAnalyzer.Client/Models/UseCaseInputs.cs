@@ -10,7 +10,7 @@ public sealed class UseCaseInputs
     public TaskCategoryOption TaskCategory { get; set; } = TaskCategoryOption.SimpleRag;
     public TaskCategoryOption LastAppliedTaskCategory { get; set; } = TaskCategoryOption.SimpleRag;
     public DifficultySensitivityOption DifficultySensitivity { get; set; } = DifficultySensitivityOption.Normal;
-    public double BaseDifficulty { get; set; } = 20;
+    public double BaseDifficulty { get; set; } = 10;
     public ContextRequirementOption ContextRequirement { get; set; } = ContextRequirementOption.MediumMostlyRelevant;
     public ReasoningDepthOption ReasoningDepth { get; set; } = ReasoningDepthOption.Light;
     public DomainSpecificityOption DomainSpecificity { get; set; } = DomainSpecificityOption.GeneralKnowledge;
@@ -44,7 +44,6 @@ public sealed class UseCaseInputs
     public double BenignFailureCostPerThousandFailuresUsd { get; set; } = 25;
     public double HumanReviewCostUsd { get; set; }
     public double OperationalRetryCostUsd { get; set; } = 0.02;
-    public double MonthlyVolume { get; set; } = 10;
     public double LatencyCostPerSecondUsd { get; set; }
     public double MaxAcceptableLatencySeconds { get; set; } = double.PositiveInfinity;
 

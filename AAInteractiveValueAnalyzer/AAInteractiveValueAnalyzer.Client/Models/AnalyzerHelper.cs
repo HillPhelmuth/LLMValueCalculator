@@ -121,10 +121,6 @@ public static class AnalyzerHelper
             "Retry overhead",
             "Operational cost of each extra attempt beyond the first.",
             "Raises expected direct cost for the modeled 1,000-task batch as expected attempts increase."),
-        ["monthly-volume"] = new FieldHelp(
-            "Monthly volume",
-            "Forecast number of 1,000-task batches run each month.",
-            "Multiplies expected value per 1,000 tasks into monthly expected value."),
         ["latency-cost"] = new FieldHelp(
             "Latency cost per second",
             "The dollar value of one second of end-to-end wait per task. Set this for interactive or customer-facing work where a user is blocked while the model responds; leave it at 0 for batch work where nothing waits on any single task.",
@@ -140,7 +136,6 @@ public static class AnalyzerHelper
         new("success", "Success", true),
         new("ev", "EV/1k", true),
         new("direct", "Direct/1k", true),
-        new("monthly", "Monthly EV", true),
         new("why", "Why", false),
         new("single", "1-attempt", false),
         new("critical", "Crit. fail", false),
@@ -168,8 +163,7 @@ public static class AnalyzerHelper
         new("critfail", "Crit fail/1k", false),
         new("benignfail", "Benign fail/1k", false),
         new("costsuccess", "Cost/1k success", false),
-        new("successdollar", "Success/$", false),
-        new("monthly", "Monthly EV", false)
+        new("successdollar", "Success/$", false)
     ];
 }
 public sealed record TableColumn(string Key, string Label, bool IsDefaultVisible);

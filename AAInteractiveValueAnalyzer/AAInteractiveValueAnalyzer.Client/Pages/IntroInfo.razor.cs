@@ -17,7 +17,7 @@ public partial class IntroInfo
 
     protected override async Task OnInitializedAsync()
     {
-        var markdownOutput = await HttpClient.GetStringAsync("Readme.md");
+        var markdownOutput = await HttpClient.GetStringAsync("how-it-works.md");
         _markdownText = MarkdownToHtml(markdownOutput);
     }
 
