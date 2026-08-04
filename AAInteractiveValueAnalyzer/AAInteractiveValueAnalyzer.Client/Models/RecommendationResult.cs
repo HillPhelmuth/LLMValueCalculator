@@ -31,7 +31,6 @@ public sealed class RecommendationResult
     /// <summary>Expected value for the engine's 1,000-task analysis batch.</summary>
     public double ExpectedValuePerTaskUsd { get; init; }
 
-    public double MonthlyExpectedValueUsd { get; init; }
     public double ExpectedCriticalFailureCostUsd { get; init; }
     public double ExpectedBenignFailureCostUsd { get; init; }
     public double WorstCaseFailureCostUsd { get; init; }

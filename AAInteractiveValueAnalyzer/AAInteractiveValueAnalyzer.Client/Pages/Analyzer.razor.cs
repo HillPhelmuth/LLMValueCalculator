@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using AAInteractiveValueAnalyzer.Client.Models;
 using AAInteractiveValueAnalyzer.Client.Services;
 using Microsoft.AspNetCore.Components;
@@ -10,12 +12,27 @@ namespace AAInteractiveValueAnalyzer.Client.Pages;
 
 public partial class Analyzer
 {
+    private const string SavedConfigurationsStorageKey = "aaInteractiveValueAnalyzer.savedConfigurations.v1";
+
+    private static readonly JsonSerializerOptions SavedConfigurationJsonOptions = new()
+    {
+        NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
+    };
+
     private enum ComparisonEligibilityFilter
     {
         All,
         EligibleOnly,
         ExcludedOnly
     }
+
+    private enum ResultsTab
+    {
+        RankedEligible,
+        FullUniverse
+    }
+
+    private sealed record SavedConfiguration(string Name, UseCaseInputs Inputs);
 
     private UseCaseInputs Inputs { get; set; } = new();
 
@@ -26,6 +43,7 @@ public partial class Analyzer
     private string RecommendationFilterText { get; set; } = string.Empty;
     private string ComparisonFilterText { get; set; } = string.Empty;
     private ComparisonEligibilityFilter ComparisonFilter { get; set; }
+    private ResultsTab ActiveResultsTab { get; set; } = ResultsTab.RankedEligible;
     private RecommendationResult? ActiveModalResult { get; set; }
     private string ActiveModalTitle { get; set; } = string.Empty;
     private string? ActiveHelpKey { get; set; }
@@ -33,6 +51,14 @@ public partial class Analyzer
     private string? AnalysisError { get; set; }
     private bool _analysisPending;
     private bool IsCalibrationEditorOpen { get; set; }
+    private List<SavedConfiguration> SavedConfigurations { get; set; } = [];
+    private string ConfigurationName { get; set; } = string.Empty;
+    private string SelectedConfigurationName { get; set; } = string.Empty;
+    private string? SavedConfigurationStatus { get; set; }
+    private bool SavedConfigurationStatusIsError { get; set; }
+    private bool IsSavingConfiguration { get; set; }
+    private bool HasSelectedConfiguration => SavedConfigurations.Any(configuration =>
+        string.Equals(configuration.Name, SelectedConfigurationName, StringComparison.OrdinalIgnoreCase));
 
     [Inject]
     private IJSRuntime JsRuntime { get; set; } = null!;
@@ -73,7 +99,22 @@ public partial class Analyzer
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadSavedConfigurationsAsync();
         await Update();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await JsRuntime.InvokeVoidAsync(
+            "aaInteractiveValueAnalyzer.initializeConfigurationDrawer",
+            "scenario-configuration",
+            "pin-controls",
+            1181);
     }
 
     
@@ -116,7 +157,176 @@ public partial class Analyzer
         RecommendationFilterText = string.Empty;
         ComparisonFilterText = string.Empty;
         ComparisonFilter = ComparisonEligibilityFilter.All;
+        ActiveResultsTab = ResultsTab.RankedEligible;
         await Update();
+    }
+
+    private void SelectResultsTab(ResultsTab tab) => ActiveResultsTab = tab;
+
+    private void OnSavedConfigurationSelected()
+    {
+        if (!string.IsNullOrWhiteSpace(SelectedConfigurationName))
+        {
+            ConfigurationName = SelectedConfigurationName;
+        }
+
+        SavedConfigurationStatus = null;
+        SavedConfigurationStatusIsError = false;
+    }
+
+    private async Task SaveConfigurationAsync()
+    {
+        var name = ConfigurationName.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            SetSavedConfigurationStatus("Enter a configuration name before saving.", isError: true);
+            return;
+        }
+
+        if (name.Length > 60)
+        {
+            SetSavedConfigurationStatus("Configuration names must be 60 characters or fewer.", isError: true);
+            return;
+        }
+
+        IsSavingConfiguration = true;
+        try
+        {
+            var existingIndex = SavedConfigurations.FindIndex(configuration =>
+                string.Equals(configuration.Name, name, StringComparison.OrdinalIgnoreCase));
+            var savedConfiguration = new SavedConfiguration(name, CloneInputs(Inputs));
+            if (existingIndex >= 0)
+            {
+                SavedConfigurations[existingIndex] = savedConfiguration;
+            }
+            else
+            {
+                SavedConfigurations.Add(savedConfiguration);
+            }
+
+            SortSavedConfigurations();
+            SelectedConfigurationName = name;
+            ConfigurationName = name;
+            await PersistSavedConfigurationsAsync();
+            SetSavedConfigurationStatus(existingIndex >= 0
+                ? $"Updated '{name}'."
+                : $"Saved '{name}' in this browser.");
+        }
+        catch (Exception exception)
+        {
+            SetSavedConfigurationStatus($"The configuration could not be saved: {exception.Message}", isError: true);
+        }
+        finally
+        {
+            IsSavingConfiguration = false;
+        }
+    }
+
+    private async Task LoadConfigurationAsync()
+    {
+        var savedConfiguration = SavedConfigurations.FirstOrDefault(configuration =>
+            string.Equals(configuration.Name, SelectedConfigurationName, StringComparison.OrdinalIgnoreCase));
+        if (savedConfiguration is null)
+        {
+            SetSavedConfigurationStatus("Select a saved configuration to load.", isError: true);
+            return;
+        }
+
+        Inputs = CloneInputs(savedConfiguration.Inputs);
+        ConfigurationName = savedConfiguration.Name;
+        ActiveModalResult = null;
+        ActiveModalTitle = string.Empty;
+        ActiveHelpKey = null;
+        await Update();
+        SetSavedConfigurationStatus($"Loaded '{savedConfiguration.Name}'.");
+    }
+
+    private async Task DeleteConfigurationAsync()
+    {
+        IsSavingConfiguration = true;
+        try
+        {
+            var removed = SavedConfigurations.RemoveAll(configuration =>
+                string.Equals(configuration.Name, SelectedConfigurationName, StringComparison.OrdinalIgnoreCase));
+            if (removed == 0)
+            {
+                SetSavedConfigurationStatus("Select a saved configuration to delete.", isError: true);
+                return;
+            }
+
+            var deletedName = SelectedConfigurationName;
+            SelectedConfigurationName = string.Empty;
+            ConfigurationName = string.Empty;
+            await PersistSavedConfigurationsAsync();
+            SetSavedConfigurationStatus($"Deleted '{deletedName}'.");
+        }
+        catch (Exception exception)
+        {
+            SetSavedConfigurationStatus($"The configuration could not be deleted: {exception.Message}", isError: true);
+        }
+        finally
+        {
+            IsSavingConfiguration = false;
+        }
+    }
+
+    private async Task LoadSavedConfigurationsAsync()
+    {
+        try
+        {
+            var json = await JsRuntime.InvokeAsync<string?>(
+                "aaInteractiveValueAnalyzer.getLocalStorage",
+                SavedConfigurationsStorageKey);
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return;
+            }
+
+            var savedConfigurations = JsonSerializer.Deserialize<List<SavedConfiguration>>(
+                json,
+                SavedConfigurationJsonOptions);
+            SavedConfigurations = savedConfigurations?
+                .Where(configuration => configuration.Inputs is not null && !string.IsNullOrWhiteSpace(configuration.Name))
+                .GroupBy(configuration => configuration.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Select(group => new SavedConfiguration(group.Key[..Math.Min(group.Key.Length, 60)], CloneInputs(group.Last().Inputs)))
+                .ToList() ?? [];
+            SortSavedConfigurations();
+        }
+        catch
+        {
+            SavedConfigurations = [];
+            SetSavedConfigurationStatus(
+                "Saved configurations could not be read. Existing calculator defaults are still active.",
+                isError: true);
+        }
+    }
+
+    private async Task PersistSavedConfigurationsAsync()
+    {
+        var json = JsonSerializer.Serialize(SavedConfigurations, SavedConfigurationJsonOptions);
+        await JsRuntime.InvokeVoidAsync(
+            "aaInteractiveValueAnalyzer.setLocalStorage",
+            SavedConfigurationsStorageKey,
+            json);
+    }
+
+    private void SortSavedConfigurations()
+    {
+        SavedConfigurations = SavedConfigurations
+            .OrderBy(configuration => configuration.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+    }
+
+    private static UseCaseInputs CloneInputs(UseCaseInputs inputs)
+    {
+        var json = JsonSerializer.Serialize(inputs, SavedConfigurationJsonOptions);
+        return JsonSerializer.Deserialize<UseCaseInputs>(json, SavedConfigurationJsonOptions) ?? new UseCaseInputs();
+    }
+
+    private void SetSavedConfigurationStatus(string message, bool isError = false)
+    {
+        SavedConfigurationStatus = message;
+        SavedConfigurationStatusIsError = isError;
     }
 
     private void OpenCalibrationEditor() => IsCalibrationEditorOpen = true;
@@ -275,7 +485,6 @@ public partial class Analyzer
             "direct" => OrderBy(items, item => item.ExpectedTotalDirectCostUsd, sort.Descending),
             "costsuccess" => OrderBy(items, item => item.CostPerSuccessfulTaskUsd, sort.Descending),
             "successdollar" => OrderBy(items, item => item.SuccessPerDollar, sort.Descending),
-            "monthly" => OrderBy(items, item => item.MonthlyExpectedValueUsd, sort.Descending),
             "status" => sort.Descending
                 ? items.OrderByDescending(item => item.IsEligible)
                 : items.OrderBy(item => item.IsEligible),
@@ -383,6 +592,36 @@ public partial class Analyzer
 
     private static string Currency(double value) => RecommendationEngine.FormatCurrency(value);
 
+    private static string MetricCurrency(double? value) => value.HasValue ? Currency(value.Value) : "—";
+
+    private static string MetricModel(RecommendationResult? result) => result?.Model.DisplayName ?? "No eligible model";
+
+    private static string MetricAttempts(RecommendationResult? result) => result is null
+        ? "No eligible model"
+        : $"{result.ExpectedAttempts:0.00} exp. tries";
+
+    private static string BestEvSpread(AnalysisSummary summary)
+    {
+        if (summary.BestExpectedValue is null || summary.CheapestEligible is null)
+        {
+            return "—";
+        }
+
+        return Currency(summary.BestExpectedValue.ExpectedValuePerTaskUsd - summary.CheapestEligible.ExpectedValuePerTaskUsd);
+    }
+
+    private static string GetEvBarWidth(RecommendationResult item, IEnumerable<RecommendationResult> visibleRows)
+    {
+        var maximum = visibleRows.Select(row => Math.Max(0, row.ExpectedValuePerTaskUsd)).DefaultIfEmpty(0).Max();
+        if (maximum <= 0 || item.ExpectedValuePerTaskUsd <= 0)
+        {
+            return "0%";
+        }
+
+        var width = Math.Clamp(item.ExpectedValuePerTaskUsd / maximum * 100, 0, 100);
+        return width.ToString("0.#", CultureInfo.InvariantCulture) + "%";
+    }
+
     private static string BatchCurrency(double? value)
     {
         return value.HasValue
@@ -426,11 +665,11 @@ public partial class Analyzer
 
     private string BuildComparisonCsv(IReadOnlyList<RecommendationResult> items)
     {
-        var columns = ComparisonColumns.Where(column => VisibleComparisonColumns.Contains(column.Key)).ToList();
+        //var columns = ComparisonColumns.ToList();
         var csv = new StringBuilder();
 
         csv.Append(EscapeCsv("Model"));
-        foreach (var column in columns)
+        foreach (var column in ComparisonColumns)
         {
             csv.Append(',').Append(EscapeCsv(column.Label));
         }
@@ -440,7 +679,7 @@ public partial class Analyzer
         foreach (var item in items)
         {
             csv.Append(EscapeCsv(item.Model.DisplayName));
-            foreach (var column in columns)
+            foreach (var column in ComparisonColumns)
             {
                 csv.Append(',').Append(EscapeCsv(GetComparisonCsvValue(column.Key, item)));
             }
@@ -482,7 +721,6 @@ public partial class Analyzer
             "costsuccess" => Currency(item.CostPerSuccessfulTaskUsd),
             "successdollar" => Number(item.SuccessPerDollar, "0.00"),
             "ev" => Currency(item.ExpectedValuePerTaskUsd),
-            "monthly" => Currency(item.MonthlyExpectedValueUsd),
             "status" => item.IsEligible ? "Eligible" : "Excluded",
             _ => string.Empty
         };
@@ -642,8 +880,7 @@ public partial class Analyzer
             new("Worst-case (critical) failure cost / 1k tasks", item.Model.HasCostData ? Currency(item.WorstCaseFailureCostUsd) : "n/a"),
             new("Cost per 1k successful tasks", Currency(item.CostPerSuccessfulTaskUsd)),
             new("Success per dollar", Number(item.SuccessPerDollar, "0.00")),
-            new("Expected value / 1k tasks", Currency(item.ExpectedValuePerTaskUsd)),
-            new("Monthly expected value", Currency(item.MonthlyExpectedValueUsd))
+            new("Expected value / 1k tasks", Currency(item.ExpectedValuePerTaskUsd))
         ];
     }
 }

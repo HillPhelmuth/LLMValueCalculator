@@ -1,8 +1,11 @@
-![image](/LlmRoiCalc-icon-256.jpg)
+<p style="margin-left:30%">
+<img src="/LlmEvIconNew-small.png" alt="image"/>
+</p>
 
-# Interactive LLM EV Calculator and Model Selection Tool
+# Model Value Analyzer
+**An Interactive LLM EV Calculator and Model Selection Tool**
 
-Interactive LLM EV Calculator is a workload-specific model selection tool. It helps compare LLMs by combining Artificial Analysis [intelligence](https://artificialanalysis.ai/#intelligence) and [cost priors](https://artificialanalysis.ai/#price-and-cost) with your own estimate of task difficulty, quality requirements, failure tolerance, retry behavior, review cost, and business value.
+Model Value Analyzer is a workload-specific model selection tool. It helps compare LLMs by combining Artificial Analysis [intelligence](https://artificialanalysis.ai/#intelligence) and [cost](https://artificialanalysis.ai/#price-and-cost) data with your own estimate of task difficulty, quality requirements, failure tolerance, retry behavior, review cost, and business value.
 
 The goal is not to declare one universal best model. The goal is to make the tradeoff explicit for a specific use case.
 
@@ -39,11 +42,11 @@ The output should be treated as a planning estimate. Production decisions should
 
 6. Enter economics.
 
-   Business value per 1,000 full successes, value per 1,000 partial successes, cost per 1,000 benign failures, critical-failure cost per incident, human review cost, operational retry cost, monthly volume in 1,000-task batches, and the manual AA adjustment determine expected value and monthly impact. The manual adjustment multiplies the automatic workload-cost factor.
+   Business value per 1,000 full successes, value per 1,000 partial successes, cost per 1,000 benign failures, critical-failure cost per incident, human review cost, operational retry cost, and the manual AA adjustment determine expected value. The manual adjustment multiplies the automatic workload-cost factor.
 
 7. Compare recommendations.
 
-   The analyzer highlights eligible models and shows expected success, critical-failure rate, expected attempts, direct cost per 1,000 tasks, cost per 1,000 successful tasks, success per dollar, expected value per 1,000 tasks, and monthly expected value.
+   The analyzer highlights eligible models and shows expected success, critical-failure rate, expected attempts, direct cost per 1,000 tasks, cost per 1,000 successful tasks, success per dollar, and expected value per 1,000 tasks.
 
 ## Methodology
 
@@ -89,11 +92,9 @@ expected value per 1000 tasks =
    - direct and latency costs per 1000 tasks
 ```
 
-Monthly expected value multiplies that per-1,000-task estimate by monthly volume, where monthly volume is entered in 1,000-task batches.
-
 ## Task Categories
 
-Task category is intentionally not the whole score. A category provides a starting point, not a final truth.
+Task category is **mostly** just a combination of preset workload inputs and guardrail assumptions. Each set of assumptions can be tuned to match the actual workload.
 
 For example, code generation can range from a simple DTO to a production deployment pipeline. Research can range from a short grounded comparison to a high-stakes synthesis over weak evidence. The detailed inputs should carry most of that distinction.
 
@@ -126,6 +127,8 @@ Examples:
 
 ## How To Interpret Results
 
+### The Ranked Eligible Models Tab
+
 Eligible models meet both hard thresholds:
 
 - Estimated effective success is at or above the required success rate.
@@ -140,47 +143,18 @@ Rankings are then based on economics and quality:
 
 No single ranking is always correct. For low-risk internal automation, success per dollar may matter most. For customer-facing or regulated workflows, eligibility, critical-failure exposure, and human review assumptions may matter more than direct cost.
 
+### The Full Universe Tab
+
+All models with sufficient data on [Artificial Analysis](https://artificialanalysis.ai) are shown, including those that fail the hard thresholds. This tab is useful for exploring tradeoffs and understanding how close a model is to eligibility.
+
+
 ## Important Assumptions
 
 The analyzer uses Artificial Analysis intelligence and cost values as priors. They are useful starting points, but they are not substitutes for workload-specific evaluation.
 
-The success curve assumes that adjusted model intelligence and effective workload difficulty can be compared on a shared scale. This is a simplification.
-
-The cost inputs are modeled into 1,000-task batch outputs, not necessarily per API call. Real cost should include token usage, tool calls, retries, latency, caching, orchestration, review labor, incident handling, and vendor-specific pricing.
-
 Critical failures are estimated from overall failure probability, a configured share of failures that are critical, and exposure multipliers from risk factors and guardrails.
 
-Retries are modeled as independent attempts. Real retries may be correlated if the model fails for the same reason repeatedly.
+Retries are modeled as independent attempts. 
 
 Guardrails are modeled as coarse effects. A strong validator, weak validator, human reviewer, or eval set can have very different real-world impact depending on implementation quality.
 
-## Limitations
-
-This is a decision-support calculator, not a benchmark.
-
-It does not run prompts against models.
-
-It does not measure latency, context-window limits, rate limits, availability, privacy posture, data residency, contractual terms, or operational maturity.
-
-It does not know your actual prompt quality, retrieval quality, test coverage, review rubric, or user tolerance for errors.
-
-It does not replace representative evals. For production use, replace the estimated success curve with measured results from your own examples.
-
-It assumes the model catalog values are current enough for planning. Update the catalog when Artificial Analysis data, vendor pricing, or available models change.
-
-## Minimal Developer Notes
-
-This is a .NET/Blazor solution. The main analyzer UI is in `AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/Pages/Analyzer.razor`, with supporting logic in:
-
-- `AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/Services/RecommendationEngine.cs`
-- `AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/Services/ModelCatalog.cs`
-- `AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/Models/UseCaseInputs.cs`
-- `AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/Models/AnalyzerOptions.cs`
-
-To run locally from the solution root:
-
-```powershell
-dotnet run --project .\AAInteractiveValueAnalyzer\AAInteractiveValueAnalyzer\AAInteractiveValueAnalyzer.csproj
-```
-
-Update `ModelCatalog.cs` when the model list, intelligence values, or cost priors need to change.

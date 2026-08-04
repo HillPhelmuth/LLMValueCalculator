@@ -14,7 +14,7 @@
     <meta name="author" content="Adam Holm">
     <meta name="keywords" content="LLM, ROI, EV, Calculator, AI, Machine Learning, tokens, AI value, model selection, model evaluation, evaluation, Large Language Models, Artificial Intelligence, Artifical Analysis">
     <ImportMap />
-    <link rel="icon" type="image/jpeg" href="LlmRoiCalc-icon.jpg" />
+    <link rel="icon" type="image/png" href="LlmEvIconNew.png" />
     <HeadOutlet @rendermode="new InteractiveWebAssemblyRenderMode()" />
 </head>
 
@@ -49,6 +49,17 @@
             },
             removeLocalStorage: function (key) {
                 window.localStorage.removeItem(key);
+            },
+            initializeConfigurationDrawer: function (drawerId, pinControlId, minimumWidth) {
+                const drawer = document.getElementById(drawerId);
+                const pinControl = document.getElementById(pinControlId);
+
+                if (!drawer || !pinControl || !window.matchMedia(`(min-width: ${minimumWidth}px)`).matches) {
+                    return;
+                }
+
+                drawer.setAttribute("open", "");
+                pinControl.checked = true;
             }
         };
     </script>

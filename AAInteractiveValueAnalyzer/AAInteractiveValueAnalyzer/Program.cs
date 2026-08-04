@@ -47,6 +47,7 @@ app.MapGet("api/calibration-profile", async (HttpRequest request, HttpResponse r
     }
     catch (Exception error) when (error is IOException or JsonException or InvalidOperationException)
     {
+        Console.WriteLine(error);
         return Results.Problem("No valid active calibration profile is available.", statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 });

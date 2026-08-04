@@ -1278,7 +1278,7 @@ details ul {
 
 /* Command Deck analyzer --------------------------------------------------- */
 body:has(.dense-analyzer) {
-    background: #07111f;
+    background: #070809;
 }
 
 .dense-analyzer {
@@ -1611,7 +1611,7 @@ body:has(.dense-analyzer) {
     right: 0;
     bottom: 0;
     z-index: 31;
-    width: min(570px, 94vw);
+    width: min(600px, 94vw);
     overflow-y: auto;
     border-left: 1px solid var(--deck-border);
     background: var(--deck-surface);
@@ -1649,6 +1649,7 @@ body:has(.dense-analyzer) {
 .drawer-header-actions {
     display: flex;
     align-items: center;
+    justify-content:space-between;
     gap: 8px;
     flex: 0 0 auto;
 }
@@ -1712,9 +1713,9 @@ body:has(.dense-analyzer) {
 
 @media (min-width: 1181px) {
     .dense-analyzer:has(#pin-controls:checked) {
-        width: calc(100% - 570px);
+        width: calc(100% - 600px);
         margin-left: 0;
-        margin-right: 570px;
+        margin-right: 600px;
         transition: width 180ms ease-out, margin-right 180ms ease-out;
     }
 
@@ -1723,7 +1724,7 @@ body:has(.dense-analyzer) {
     }
 
     .config-drawer:has(#pin-controls:checked) .config-drawer-panel {
-        width: 570px;
+        width: 600px;
         box-shadow: none;
         animation: none;
     }

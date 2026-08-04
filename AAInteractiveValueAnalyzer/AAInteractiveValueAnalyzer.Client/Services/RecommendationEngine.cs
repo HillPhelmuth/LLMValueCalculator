@@ -294,8 +294,8 @@ public class RecommendationEngine
         {
             [TaskCategoryOption.Extraction] = new(
                 Category: TaskCategoryOption.Extraction,
-                BaseDifficultyPercentResidual: -4,
-                DefaultBaseDifficulty: 4,
+                BaseDifficultyPercentResidual: 0,
+                DefaultBaseDifficulty: 6,
                 DefaultContextRequirement: ContextRequirementOption.MediumMostlyRelevant,
                 DefaultReasoningDepth: ReasoningDepthOption.SingleStepTransformation,
                 DefaultToolUse: ToolUseOption.None,
@@ -304,13 +304,12 @@ public class RecommendationEngine
                 DefaultHasDeterministicValidation: true,
                 DefaultRequiresStrictStructuredOutput: true,
                 DefaultHasSilentFailureRisk: false,
-                DefaultRetriesAllowed: true,
-                DefaultMaxAttempts: 2),
+                DefaultRetriesAllowed: true),
             [TaskCategoryOption.SimpleRag] = new(
                 Category: TaskCategoryOption.SimpleRag,
-                BaseDifficultyPercentResidual: -4,
-                DefaultBaseDifficulty: 6,
-                DefaultContextRequirement: ContextRequirementOption.ShortClean,
+                BaseDifficultyPercentResidual: 0,
+                DefaultBaseDifficulty: 10,
+                DefaultContextRequirement: ContextRequirementOption.MediumMostlyRelevant,
                 DefaultReasoningDepth: ReasoningDepthOption.Light,
                 DefaultToolUse: ToolUseOption.OneOrTwoDeterministicTools,
                 DefaultVerifiability: VerifiabilityOption.MostlyVerifiableByReviewer,
@@ -319,9 +318,10 @@ public class RecommendationEngine
                 DefaultRequiresStrictStructuredOutput: false,
                 DefaultHasSilentFailureRisk: false),
             [TaskCategoryOption.ClassificationRouting] = new(TaskCategoryOption.ClassificationRouting,
-                BaseDifficultyPercentResidual: 0, DefaultBaseDifficulty: 10,
+                BaseDifficultyPercentResidual: 0, 
+                DefaultBaseDifficulty: 10,
                 DefaultContextRequirement: ContextRequirementOption.LargeClean,
-                DefaultReasoningDepth: ReasoningDepthOption.ModerateMultiStep,
+                DefaultReasoningDepth: ReasoningDepthOption.SingleStepTransformation,
                 DefaultToolUse: ToolUseOption.None,
                 DefaultVerifiability: VerifiabilityOption.MostlyVerifiableByReviewer,
                 DefaultOutputConstraint: OutputConstraintOption.FreeText,
@@ -330,10 +330,10 @@ public class RecommendationEngine
                 Category: TaskCategoryOption.Summarization,
                 BaseDifficultyPercentResidual: 0,
                 DefaultBaseDifficulty: 10,
-                DefaultContextRequirement: ContextRequirementOption.LargeClean,
-                DefaultReasoningDepth: ReasoningDepthOption.ModerateMultiStep,
+                DefaultContextRequirement: ContextRequirementOption.LargeNoisy,
+                DefaultReasoningDepth: ReasoningDepthOption.Light,
                 DefaultToolUse: ToolUseOption.None,
-                DefaultVerifiability: VerifiabilityOption.MostlyVerifiableByReviewer,
+                DefaultVerifiability: VerifiabilityOption.PartlySubjective,
                 DefaultOutputConstraint: OutputConstraintOption.FreeText,
                 DefaultHasSilentFailureRisk: true),
             [TaskCategoryOption.CodeGeneration] = new(
@@ -355,7 +355,7 @@ public class RecommendationEngine
                 DefaultBaseDifficulty: 35,
                 DefaultContextRequirement: ContextRequirementOption.LargeClean,
                 DefaultReasoningDepth: ReasoningDepthOption.DeepConditional,
-                DefaultToolUse: ToolUseOption.MultipleToolsWithValidation,
+                DefaultToolUse: ToolUseOption.AgenticWorkflowWithIrreversibleActions,
                 DefaultVerifiability: VerifiabilityOption.MostlyVerifiableByReviewer,
                 DefaultOutputConstraint: OutputConstraintOption.StructuredJsonOrSchema,
                 DefaultHasSilentFailureRisk: true),
@@ -642,8 +642,6 @@ public class RecommendationEngine
               - expectedCriticalFailureCost
               - expectedBenignFailureCost
             : double.NaN;
-        var monthlyExpectedValue = model.HasCostData ? expectedValue * Math.Max(0, inputs.MonthlyVolume) : double.NaN;
-
         // NEW: downside exposure. The expected critical-failure cost over the batch, i.e. the part
         // of failure that is genuinely harmful rather than merely a retry. This is identical to
         // expectedCriticalFailureCost above; kept as a distinctly named output so the asymmetric-cost
@@ -715,7 +713,6 @@ public class RecommendationEngine
             RealizedGoodOutcomeShare = realizedGoodShare,
             BlendedValuePerThousandSuccessesUsd = blendedValuePerThousandSuccesses,
             ExpectedValuePerTaskUsd = expectedValue,
-            MonthlyExpectedValueUsd = monthlyExpectedValue,
             ExpectedCriticalFailureCostUsd = expectedCriticalFailureCost,
             ExpectedBenignFailureCostUsd = expectedBenignFailureCost,
             WorstCaseFailureCostUsd = worstCaseFailureCost,

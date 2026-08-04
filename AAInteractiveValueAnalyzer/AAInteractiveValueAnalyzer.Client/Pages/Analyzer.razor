@@ -8,11 +8,6 @@
 }
 
 <main class="page-shell dense-analyzer">
-    <div style="position:sticky;margin-left:94vw;top:4rem;height:0;overflow:visible">
-        <button style="padding:0;border:none;background:none;" @onclick="Update" title="refresh">
-            <svg width="64px" height="64px" viewBox="-2.4 -2.4 28.80 28.80" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="#13e510"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <circle opacity="0.5" cx="12" cy="12" r="10" fill="#1346ec"></circle> <path d="M7.37756 11.6296H6.62756H7.37756ZM7.37756 12.5556L6.81609 13.0528C6.95137 13.2056 7.14306 13.2966 7.34695 13.3049C7.55084 13.3133 7.74932 13.2382 7.89662 13.0969L7.37756 12.5556ZM9.51905 11.5414C9.81805 11.2547 9.82804 10.7799 9.54137 10.4809C9.2547 10.182 8.77994 10.172 8.48095 10.4586L9.51905 11.5414ZM6.56148 10.5028C6.28686 10.1927 5.81286 10.1639 5.50277 10.4385C5.19267 10.7131 5.16391 11.1871 5.43852 11.4972L6.56148 10.5028ZM14.9317 9.0093C15.213 9.31337 15.6875 9.33184 15.9915 9.05055C16.2956 8.76927 16.3141 8.29476 16.0328 7.9907L14.9317 9.0093ZM12.0437 6.25C9.05802 6.25 6.62756 8.653 6.62756 11.6296H8.12756C8.12756 9.49251 9.87531 7.75 12.0437 7.75V6.25ZM6.62756 11.6296L6.62756 12.5556H8.12756L8.12756 11.6296H6.62756ZM7.89662 13.0969L9.51905 11.5414L8.48095 10.4586L6.85851 12.0142L7.89662 13.0969ZM7.93904 12.0583L6.56148 10.5028L5.43852 11.4972L6.81609 13.0528L7.93904 12.0583ZM16.0328 7.9907C15.0431 6.9209 13.6212 6.25 12.0437 6.25V7.75C13.1879 7.75 14.2154 8.23504 14.9317 9.0093L16.0328 7.9907Z" fill="#1346ec"></path> <path d="M16.6188 11.4443L17.1795 10.9462C17.044 10.7937 16.8523 10.703 16.6485 10.6949C16.4447 10.6868 16.2464 10.7621 16.0993 10.9034L16.6188 11.4443ZM14.4805 12.4581C14.1817 12.745 14.1722 13.2198 14.4591 13.5185C14.746 13.8173 15.2208 13.8269 15.5195 13.54L14.4805 12.4581ZM17.4393 13.4972C17.7144 13.8068 18.1885 13.8348 18.4981 13.5597C18.8078 13.2846 18.8358 12.8106 18.5607 12.5009L17.4393 13.4972ZM9.04688 15.0047C8.76342 14.7027 8.28879 14.6876 7.98675 14.9711C7.68472 15.2545 7.66966 15.7292 7.95312 16.0312L9.04688 15.0047ZM11.9348 17.7499C14.9276 17.7499 17.3688 15.3496 17.3688 12.3703H15.8688C15.8688 14.5047 14.1158 16.2499 11.9348 16.2499V17.7499ZM17.3688 12.3703V11.4443H15.8688V12.3703H17.3688ZM16.0993 10.9034L14.4805 12.4581L15.5195 13.54L17.1383 11.9853L16.0993 10.9034ZM16.0581 11.9425L17.4393 13.4972L18.5607 12.5009L17.1795 10.9462L16.0581 11.9425ZM7.95312 16.0312C8.94543 17.0885 10.3635 17.7499 11.9348 17.7499V16.2499C10.792 16.2499 9.76546 15.7704 9.04688 15.0047L7.95312 16.0312Z" fill="#1346ec"></path> </g></svg>
-        </button>
-    </div>
 @if (ActiveFieldHelp is not null)
 {
     <div class="modal-backdrop" @onclick="CloseFieldHelp">
@@ -55,7 +50,7 @@ else if (ActiveModalResult is not null)
             {
                 <div class="data-modal-section">
                     <h3>Model notes</h3>
-                    <p>@ActiveModalResult.Model.Notes</p>
+                    @* <p>@ActiveModalResult.Model.Notes</p> *@
                 </div>
             }
             <div class="data-modal-section">
@@ -79,44 +74,43 @@ else if (ActiveModalResult is not null)
 }
 
 <header class="command-bar">
-    <a class="command-brand" href="/" aria-label="Model Value Analyzer home">
-        <span class="command-mark" aria-hidden="true">A</span>
-        <span>Model Value Analyzer</span>
-        <small>/ Live scenario</small>
-    </a>
+    <div class="command-left">
+        <a class="command-brand" href="/" aria-label="Model Value Analyzer home">
+            <span class="command-mark" aria-hidden="true">Λ</span>
+            <span>Model Value Analyzer</span>
+            <small><span class="live-dot" aria-hidden="true"></span> Live · @Inputs.TaskCategory.DisplayName()</small>
+        </a>
+        <button type="button" class="command-button secondary configure-command" onclick="document.getElementById('scenario-configuration').setAttribute('open','')">
+            <span class="button-icon configure-icon" aria-hidden="true">⚙</span>
+            Configure
+        </button>
+    </div>
     <nav class="command-actions" aria-label="Analyzer actions">
         <a class="command-link" href="/intro-info">How it works</a>
-        <button type="button" class="command-button secondary" @onclick="OpenCalibrationEditor">
+        <button type="button" class="command-button secondary advanced-calibration-command" @onclick="OpenCalibrationEditor">
+            <span class="button-icon calibration-icon" aria-hidden="true"></span>
             Advanced calibration
         </button>
-        <button type="button" class="command-button secondary" disabled="@IsAnalyzing" @onclick="Update">
-            @(IsAnalyzing ? "Calculating..." : "Refresh")
+        <button type="button" class="command-button secondary export-command" title="Download the filtered full comparison as CSV" disabled="@IsAnalyzing" @onclick="DownloadComparisonCsv">
+            Export CSV
         </button>
-        <button type="button" class="command-button primary" onclick="document.getElementById('scenario-configuration').setAttribute('open','')">
-            <span aria-hidden="true">⚙</span> Configure
+        <button type="button" class="command-button secondary" disabled="@IsAnalyzing" @onclick="ResetDefaults">
+            Reset
+        </button>
+        <button type="button" class="command-button primary" disabled="@IsAnalyzing" @onclick="Update">
+            @(IsAnalyzing ? "Calculating..." : "Recalculate")
         </button>
     </nav>
 </header>
 
-<section class="command-hero">
-    <div>
-        <p class="command-eyebrow">Decision workspace</p>
-        <h1>Model recommendations</h1>
-        <p>Ranked by expected value while respecting reliability, risk, and cost constraints.</p>
-    </div>
-    <div class="scenario-chips" aria-label="Current scenario summary">
-        <span><strong>@Inputs.TaskCategory.DisplayName()</strong></span>
-        <span>@Inputs.DifficultySensitivity.DisplayName() sensitivity</span>
-        <span>Success ≥ <strong>@Inputs.RequiredSuccessRate.ToString("0.0")%</strong></span>
-        <span><strong>@Inputs.MonthlyVolume.ToString("0")k</strong> tasks / month</span>
-    </div>
-</section>
+<h1 class="visually-hidden">Model Value Analyzer</h1>
 
 <section class="command-metrics" aria-label="Analysis summary">
     <article><span>Eligible models</span><strong>@summary.EligibleResults.Count <small>of @summary.Results.Count</small></strong></article>
-    <article><span>Effective difficulty</span><strong>@summary.EffectiveDifficulty.ToString("0.0")</strong></article>
-    <article><span>Required success</span><strong>@Inputs.RequiredSuccessRate.ToString("0.0")%</strong></article>
-    <article><span>Critical failure ceiling</span><strong>@Inputs.AllowedCriticalFailureRate.ToString("0.00")%</strong></article>
+    <article><span>Effective difficulty</span><strong>@summary.EffectiveDifficulty.ToString("0.0") <small>idx</small></strong></article>
+    <article class="accent-metric"><span>Best EV / 1k</span><strong>@MetricCurrency(summary.BestExpectedValue?.ExpectedValuePerTaskUsd) <small>@MetricModel(summary.BestExpectedValue)</small></strong></article>
+    <article><span>Run cost / 1k</span><strong>@MetricCurrency(summary.BestExpectedValue?.ExpectedTotalDirectCostUsd) <small>@MetricAttempts(summary.BestExpectedValue)</small></strong></article>
+    @* <article><span>Spread vs cheapest</span><strong>@BestEvSpread(summary) <small>EV delta</small></strong></article> *@
 </section>
 
 <details id="scenario-configuration" class="config-drawer">
@@ -125,17 +119,25 @@ else if (ActiveModalResult is not null)
     <div class="config-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="configuration-title">
 <section class="control-panel">
 <div class="section-heading split compact-actions">
-    <div>
+    <div class="config-header-copy">
         <p class="command-eyebrow">Scenario controls</p>
         <h2 id="configuration-title">Configure scenario</h2>
-        <p>Every workload, guardrail, economic, and risk input is available here.</p>
+        @* <p>Every workload, guardrail, economic, and risk input is available here.</p> *@
     </div>
     <div class="compact-actions drawer-header-actions">
+        <button type="button"
+                class="icon-button saved-configurations-trigger"
+                title="Save or load configurations"
+                aria-label="Save or load configurations"
+                onclick="document.getElementById('saved-configurations-dialog').showModal()">
+            <span class="save-icon" aria-hidden="true"></span>
+            <span>Saved</span>
+        </button>
         <label class="pin-control" title="Keep controls open beside results">
             <input id="pin-controls" type="checkbox" />
             <span class="pin-control-icon" aria-hidden="true">◆</span>
-            <span class="pin-control-label pin-label-default">Pin panel</span>
-            <span class="pin-control-label pin-label-active">Unpin panel</span>
+            <span class="pin-control-label pin-label-default">Pin</span>
+            <span class="pin-control-label pin-label-active">Unpin</span>
         </label>
         <button type="button" class="icon-button drawer-close" title="Close configuration" aria-label="Close configuration" onclick="document.getElementById('pin-controls').checked=false;document.getElementById('scenario-configuration').removeAttribute('open')">×</button>
     </div>
@@ -145,14 +147,78 @@ else if (ActiveModalResult is not null)
 {
     <div class="compact-callout error-callout" role="alert">@AnalysisError</div>
 }
-@if (Summary.CalibrationWarning is not null)
+@* @if (Summary.CalibrationWarning is not null)
 {
     <div class="compact-callout" role="status">@Summary.CalibrationWarning</div>
 }
 @if (Summary.UsesCalibrationOverrides)
 {
     <div class="compact-callout" role="status">Local calibration overrides are active for these results.</div>
-}
+} *@
+
+<dialog id="saved-configurations-dialog"
+        class="saved-configurations"
+        aria-labelledby="saved-configurations-title">
+    <div class="saved-configurations-heading">
+        <div>
+            <h3 id="saved-configurations-title">Saved configurations</h3>
+            <p>Name this scenario or load one saved in this browser.</p>
+        </div>
+        <div class="saved-configurations-modal-actions">
+            <span>@SavedConfigurations.Count saved</span>
+            <button type="button"
+                    class="icon-button saved-configurations-close"
+                    title="Close saved configurations"
+                    aria-label="Close saved configurations"
+                    onclick="document.getElementById('saved-configurations-dialog').close()">×</button>
+        </div>
+    </div>
+    <div class="saved-configuration-grid">
+        <label class="compact-field saved-name-field">
+            <span>Configuration name</span>
+            <input type="text"
+                   maxlength="60"
+                   placeholder="e.g. Support RAG — production"
+                   @bind="ConfigurationName"
+                   @bind:event="oninput" />
+        </label>
+        <button type="button"
+                class="secondary-button saved-configuration-action"
+                disabled="@(string.IsNullOrWhiteSpace(ConfigurationName) || IsSavingConfiguration)"
+                @onclick="SaveConfigurationAsync">
+            @(IsSavingConfiguration ? "Saving..." : "Save")
+        </button>
+        <label class="compact-field saved-select-field">
+            <span>Saved configuration</span>
+            <select @bind="SelectedConfigurationName" @bind:after="OnSavedConfigurationSelected">
+                <option value="">Select a configuration</option>
+                @foreach (var configuration in SavedConfigurations)
+                {
+                    <option value="@configuration.Name">@configuration.Name</option>
+                }
+            </select>
+        </label>
+        <button type="button"
+                class="secondary-button saved-configuration-action"
+                disabled="@(!HasSelectedConfiguration || IsSavingConfiguration)"
+                @onclick="LoadConfigurationAsync">
+            Load
+        </button>
+        <button type="button"
+                class="icon-button saved-configuration-delete"
+                title="Delete selected configuration"
+                aria-label="Delete selected configuration"
+                disabled="@(!HasSelectedConfiguration || IsSavingConfiguration)"
+                @onclick="DeleteConfigurationAsync">
+            ×
+        </button>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(SavedConfigurationStatus))
+    {
+        <p class="saved-configuration-status @(SavedConfigurationStatusIsError ? "error" : null)"
+           role="@(SavedConfigurationStatusIsError ? "alert" : "status")">@SavedConfigurationStatus</p>
+    }
+</dialog>
 
 <div class="dense-form-grid two-up top-controls">
     <label class="compact-field">
@@ -477,14 +543,6 @@ else if (ActiveModalResult is not null)
 
         <label class="compact-field">
             <div class="field-label-row">
-                <span>Tasks/MO (1k)</span>
-                <button type="button" class="icon-button help-button" title="Explain monthly volume" aria-label='@GetFieldHelpAriaLabel("monthly-volume")' @onclick='() => ShowFieldHelp("monthly-volume")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
-            </div>
-            <input type="number" min="0" step="1" @bind="Inputs.MonthlyVolume" @bind:after="Update"/>
-        </label>
-
-        <label class="compact-field">
-            <div class="field-label-row">
                 <span>Latency $/sec</span>
                 <button type="button" class="icon-button help-button" title="Explain latency cost" aria-label='@GetFieldHelpAriaLabel("latency-cost")' @onclick='() => ShowFieldHelp("latency-cost")' @onclick:stopPropagation="true" @onclick:preventDefault="true">?</button>
             </div>
@@ -518,6 +576,34 @@ else if (ActiveModalResult is not null)
 <AdvancedCalibrationEditor IsOpen="IsCalibrationEditorOpen" OnClose="CloseCalibrationEditor" OnCalibrationChanged="Update" />
 
 <div class="results-column">
+<section class="results-workspace" aria-label="Model results">
+    <div class="results-tabs" role="tablist" aria-label="Result tables">
+        <button type="button"
+                id="ranked-results-tab"
+                class="results-tab @(ActiveResultsTab == ResultsTab.RankedEligible ? "active" : null)"
+                role="tab"
+                aria-selected="@(ActiveResultsTab == ResultsTab.RankedEligible)"
+                aria-controls="ranked-results-panel"
+                @onclick="() => SelectResultsTab(ResultsTab.RankedEligible)">
+            Ranked · Eligible <span>@summary.EligibleResults.Count</span>
+        </button>
+        <button type="button"
+                id="full-results-tab"
+                class="results-tab @(ActiveResultsTab == ResultsTab.FullUniverse ? "active" : null)"
+                role="tab"
+                aria-selected="@(ActiveResultsTab == ResultsTab.FullUniverse)"
+                aria-controls="full-results-panel"
+                @onclick="() => SelectResultsTab(ResultsTab.FullUniverse)">
+            Full Universe <span>@summary.Results.Count</span>
+        </button>
+    </div>
+
+<div id="ranked-results-panel"
+     class="results-tab-panel"
+     role="tabpanel"
+     aria-labelledby="ranked-results-tab"
+     tabindex="0"
+     hidden="@(ActiveResultsTab != ResultsTab.RankedEligible)">
 <section class="panel recommendations-panel">
     <div class="section-heading split compact-heading">
         <div>
@@ -712,18 +798,6 @@ else if (ActiveModalResult is not null)
                             </button>
                         </th>
                     }
-                    @if (IsColumnVisible(VisibleRecommendationColumns, "monthly"))
-                    {
-                        <th scope="col">
-                            <button type="button"
-                                    class="sort-header-button num @(RecommendationSort.ColumnKey == "monthly" ? "active" : null)"
-                                    aria-label="Sort recommendations by monthly expected value"
-                                    @onclick='() => ToggleSort(true, "monthly")'>
-                                <span>Monthly EV</span>
-                                <span class="sort-indicator">@GetSortIndicator(RecommendationSort, "monthly")</span>
-                            </button>
-                        </th>
-                    }
                     <th scope="col" class="num">More</th>
                 </tr>
                 </thead>
@@ -741,10 +815,7 @@ else if (ActiveModalResult is not null)
                                         <span class="mini-pill">@tag</span>
                                     }
                                 </div>
-                                @if (!string.IsNullOrWhiteSpace(item.result.Model.Notes))
-                                {
-                                    <small>@item.result.Model.Notes</small>
-                                }
+                               
                             </div>
                         </td>
                         @if (IsColumnVisible(VisibleRecommendationColumns, "why"))
@@ -785,11 +856,10 @@ else if (ActiveModalResult is not null)
                         }
                         @if (IsColumnVisible(VisibleRecommendationColumns, "ev"))
                         {
-                            <td class="num @(item.result.ExpectedValuePerTaskUsd >= 0 ? "positive" : "negative")">@Currency(item.result.ExpectedValuePerTaskUsd)</td>
-                        }
-                        @if (IsColumnVisible(VisibleRecommendationColumns, "monthly"))
-                        {
-                            <td class="num @(item.result.MonthlyExpectedValueUsd >= 0 ? "positive" : "negative")">@Currency(item.result.MonthlyExpectedValueUsd)</td>
+                            <td class="num ev-value @(item.result.ExpectedValuePerTaskUsd >= 0 ? "positive" : "negative")">
+                                <strong>@Currency(item.result.ExpectedValuePerTaskUsd)</strong>
+                                <span class="ev-track" aria-hidden="true"><span class="ev-bar" style="width: @GetEvBarWidth(item.result, topRecommendations)"></span></span>
+                            </td>
                         }
                         <td class="num action-cell">
                             <button type="button"
@@ -807,45 +877,13 @@ else if (ActiveModalResult is not null)
         </div>
     }
 </section>
-
-<section class="panel audit-panel">
-    <details>
-        <summary class="calculation-audit-summary" title="View calculation audit details">
-            <span class="calculation-audit-chevron" aria-hidden="true">
-                <svg viewBox="0 0 16 16" width="16" height="16" focusable="false">
-                    <path d="M5 3.5L10.5 8L5 12.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-            </span>
-            <div class="section-heading compact-heading">
-                <div>
-                    <h2>Calculation audit</h2>
-                    <p>The model uses these difficulty adjustments and guardrail notes.</p>
-                </div>
-            </div>
-        </summary>
-        <div class="audit-grid">
-            <div>
-                <h3>Difficulty factors</h3>
-                <ul class="factor-list">
-                    @foreach (var factor in summary.DifficultyFactors)
-                    {
-                        <li>@factor</li>
-                    }
-                </ul>
-            </div>
-            <div>
-                <h3>Guardrails</h3>
-                <ul class="factor-list">
-                    @foreach (var factor in summary.GuardrailFactors)
-                    {
-                        <li>@factor</li>
-                    }
-                </ul>
-            </div>
-        </div>
-    </details>
-</section>
-
+</div>
+<div id="full-results-panel"
+     class="results-tab-panel"
+     role="tabpanel"
+     aria-labelledby="full-results-tab"
+     tabindex="0"
+     hidden="@(ActiveResultsTab != ResultsTab.FullUniverse)">
 <section class="panel table-panel">
 <div class="section-heading split compact-heading">
     <div>
@@ -1126,18 +1164,6 @@ else
                 </button>
             </th>
         }
-        @if (IsColumnVisible(VisibleComparisonColumns, "monthly"))
-        {
-            <th scope="col">
-                <button type="button"
-                        class="sort-header-button num @(ComparisonSort.ColumnKey == "monthly" ? "active" : null)"
-                        aria-label="Sort comparison table by monthly expected value"
-                        @onclick='() => ToggleSort(false, "monthly")'>
-                    <span>Monthly EV</span>
-                    <span class="sort-indicator">@GetSortIndicator(ComparisonSort, "monthly")</span>
-                </button>
-            </th>
-        }
         @if (IsColumnVisible(VisibleComparisonColumns, "status"))
         {
             <th scope="col">
@@ -1159,16 +1185,12 @@ else
         <tr class="@(item.IsEligible ? "eligible" : "excluded")" @key="item.Model.DisplayName">
             <td>
                 <strong>@item.Model.DisplayName</strong>
-                @* @if (!string.IsNullOrWhiteSpace(item.Model.Notes))
-                                        {
-                                            <small>@item.Model.Notes</small>
-                                        } *@
+               
             </td>
             @if (IsColumnVisible(VisibleComparisonColumns, "intel"))
             {
                 <td class="num">
                     <div>@item.AdjustedIntelligence.ToString("0.0")</div>
-                    <small title="@item.CapabilityIndexName">@item.CapabilityIndexName.Replace("Artificial Analysis ", string.Empty)</small>
                 </td>
             }
             @if (IsColumnVisible(VisibleComparisonColumns, "aacost"))
@@ -1233,11 +1255,10 @@ else
             }
             @if (IsColumnVisible(VisibleComparisonColumns, "ev"))
             {
-                <td class="num @(item.ExpectedValuePerTaskUsd >= 0 ? "positive" : "negative")">@Currency(item.ExpectedValuePerTaskUsd)</td>
-            }
-            @if (IsColumnVisible(VisibleComparisonColumns, "monthly"))
-            {
-                <td class="num @(item.MonthlyExpectedValueUsd >= 0 ? "positive" : "negative")">@Currency(item.MonthlyExpectedValueUsd)</td>
+                <td class="num ev-value @(item.ExpectedValuePerTaskUsd >= 0 ? "positive" : "negative")">
+                    <strong>@Currency(item.ExpectedValuePerTaskUsd)</strong>
+                    <span class="ev-track" aria-hidden="true"><span class="ev-bar" style="width: @GetEvBarWidth(item, comparisonRows)"></span></span>
+                </td>
             }
             @if (IsColumnVisible(VisibleComparisonColumns, "status"))
             {
@@ -1268,11 +1289,48 @@ else
     </div>
 }
 </section>
-
-<section class="dense-footnote">
-    <p>
-        Artificial Analysis intelligence and cost values are treated as priors. Production decisions should replace the estimated success curve with measured eval results and real token, retry, tool, latency, review, and critical/benign failure costs.
-    </p>
+</div>
 </section>
+
+<section class="panel audit-panel">
+    <details>
+        <summary class="calculation-audit-summary" title="View calculation audit details">
+            <span class="calculation-audit-chevron" aria-hidden="true">›</span>
+            <div class="section-heading compact-heading">
+                <div>
+                    <p class="command-eyebrow">Analysis context</p>
+                    <h2>Calculation audit</h2>
+                    <p>The model uses these difficulty adjustments and guardrail notes.</p>
+                </div>
+            </div>
+        </summary>
+        <div class="audit-grid">
+            <div>
+                <h3>Difficulty factors</h3>
+                <ul class="factor-list">
+                    @foreach (var factor in summary.DifficultyFactors)
+                    {
+                        <li>@factor</li>
+                    }
+                </ul>
+            </div>
+            <div>
+                <h3>Guardrails</h3>
+                <ul class="factor-list">
+                    @foreach (var factor in summary.GuardrailFactors)
+                    {
+                        <li>@factor</li>
+                    }
+                </ul>
+            </div>
+            @* <div class="audit-calibration">
+                <h3>Calibration</h3>
+                <p>@(summary.UsesCalibrationOverrides ? "Local calibration overrides are active." : "Server calibration defaults are active.")</p>
+                <small>@summary.CalibrationProfileVersion · @summary.CalibrationProfileHash</small>
+            </div> *@
+        </div>
+    </details>
+</section>
+
 </div>
 </main>
