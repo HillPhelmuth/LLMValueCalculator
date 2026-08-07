@@ -60,6 +60,12 @@
 
                 drawer.setAttribute("open", "");
                 pinControl.checked = true;
+            },
+            focusElementById: function (elementId) {
+                const element = document.getElementById(elementId);
+                if (element) {
+                    element.focus({ preventScroll: true });
+                }
             }
         };
     </script>

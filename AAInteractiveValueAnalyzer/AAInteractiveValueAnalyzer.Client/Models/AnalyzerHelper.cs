@@ -90,7 +90,7 @@ public static class AnalyzerHelper
             "Defines how much of overall failure probability counts as critical.",
             "Raises or lowers the modeled critical-failure rate without changing success probability."),
         ["aa-task-multiplier"] = new FieldHelp(
-            "Manual Art.Analysis adjustment",
+            "Manual cost and latency adjustment",
             "Applies a manual adjustment after the automatic workload cost factor fitted from Artificial Analysis benchmark medians.",
             "Multiplies the automatic factor derived from Context, Reasoning, and Tool use before expected model cost, direct cost, cost per 1,000 successful tasks, and expected value are computed."),
         ["value-per-success"] = new FieldHelp(

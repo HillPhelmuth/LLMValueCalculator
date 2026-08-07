@@ -29,7 +29,8 @@ public partial class Analyzer
     private enum ResultsTab
     {
         RankedEligible,
-        FullUniverse
+        FullUniverse,
+        Visualizations
     }
 
     private sealed record SavedConfiguration(string Name, UseCaseInputs Inputs);
