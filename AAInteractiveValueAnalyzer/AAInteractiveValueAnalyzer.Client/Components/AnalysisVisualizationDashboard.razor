@@ -1,0 +1,230 @@
+@if (_points.Count == 0)
+{
+    <section class="visualization-empty" role="status">
+        <h2>Visualizations unavailable</h2>
+        <p>No finite model results are available for the current scenario.</p>
+    </section>
+}
+else
+{
+    var selected = SelectedPoint;
+    <section class="visualization-dashboard" aria-label="Linked model visualizations">
+        <div class="visualization-toolbar">
+            <label class="provider-filter">
+                <span>Model provider</span>
+                <select @bind="ProviderFilter" aria-label="Filter visualizations by model provider">
+                    <option value="">All providers (@_allPoints.Count)</option>
+                    @foreach (var provider in _providers)
+                    {
+                        <option value="@provider.Name">@provider.Name (@provider.Count)</option>
+                    }
+                </select>
+            </label>
+            <span class="provider-filter-count">@_points.Count of @_allPoints.Count models plotted</span>
+        </div>
+        @if (selected is not null)
+        {
+            <header class="selection-strip @(selected.Result.IsEligible ? "eligible" : "excluded")" aria-live="polite">
+                <div class="selection-identity">
+                    <span class="selection-status">@(selected.Result.IsEligible ? "Eligible selection" : "Excluded selection")</span>
+                    <strong>@selected.Result.Model.DisplayName</strong>
+                    <small>@selected.Result.Model.Provider</small>
+                </div>
+                <dl class="selection-metrics">
+                    <div><dt>Adjusted IQ</dt><dd>@Number(selected.AdjustedIntelligence, "0.0")</dd></div>
+                    <div><dt>Success</dt><dd>@Percent(selected.Result.EffectiveSuccessRate)</dd></div>
+                    <div><dt>EV / 1k</dt><dd>@Currency(selected.ExpectedValueUsd)</dd></div>
+                    <div><dt>Economic cost / 1k</dt><dd>@Currency(selected.TotalEconomicCostUsd)</dd></div>
+                    <div><dt>Latency cost</dt><dd>@LatencyCostLabel(selected)</dd></div>
+                </dl>
+                <p class="selection-note">@SelectionNote(selected)</p>
+            </header>
+        }
+
+        <article class="visualization-panel value-frontier-panel">
+            <div class="visualization-heading">
+                <div>
+                    <p>Value frontier · all models</p>
+                    <h2>Expected value across adjusted intelligence</h2>
+                </div>
+                <span>@_valueFrontier.Count frontier · @_points.Count plotted</span>
+            </div>
+            <div class="chart-viewport wide-chart">
+                <svg viewBox="0 0 1000 420" role="group" aria-labelledby="value-frontier-title value-frontier-desc">
+                    <title id="value-frontier-title">Expected value by adjusted intelligence</title>
+                    <desc id="value-frontier-desc">All analyzed models are plotted by adjusted intelligence and expected value per one thousand tasks. Eligible models are circles, excluded models are diamonds, and the non-dominated value frontier is outlined in lime. Use arrow keys on a focused model to move through the plot and Enter or Space to select it.</desc>
+                    <rect class="chart-frame" x="70" y="34" width="902" height="326" />
+                    @foreach (var tick in _valueYTicks)
+                    {
+                        <line class="grid-line" x1="70" x2="972" y1="@F(ValueY(tick))" y2="@F(ValueY(tick))" />
+                        @SvgText("axis-label y-label", 58, ValueY(tick) + 4, CurrencyTick(tick))
+                    }
+                    @foreach (var tick in _valueXTicks)
+                    {
+                        <line class="tick-line" x1="@F(ValueX(tick))" x2="@F(ValueX(tick))" y1="360" y2="366" />
+                        @SvgText("axis-label", ValueX(tick), 382, Number(tick, "0.#"))
+                    }
+                    @if (_valueYExtent.Minimum <= 0 && _valueYExtent.Maximum >= 0)
+                    {
+                        <line class="break-even-line" x1="70" x2="972" y1="@F(ValueY(0))" y2="@F(ValueY(0))" />
+                        @SvgText("break-even-label", 80, ValueY(0) - 8, "BREAK EVEN")
+                    }
+                    <path class="frontier-path" d="@ValueFrontierPath" />
+                    @foreach (var point in _keyboardPoints)
+                    {
+                        var x = ValueX(point.AdjustedIntelligence);
+                        var y = ValueY(point.ExpectedValueUsd);
+                        <g id="@PointElementId(point)"
+                           class="@PointClass(point, _valueFrontierKeys)"
+                           role="button"
+                           tabindex="@(point.Key == _rovingKey ? 0 : -1)"
+                           aria-label="@PointAriaLabel(point)"
+                           @onfocus="() => SetRovingKey(point.Key)"
+                           @onmouseenter="() => Hover(point.Key)"
+                           @onmouseleave="ClearHover"
+                           @onclick="() => Select(point.Key)"
+                           @onkeydown="args => HandlePointKeyDown(args, point.Key)">
+                            <title>@PointTooltip(point)</title>
+                            @if (point.Key == DisplayKey)
+                            {
+                                <circle class="selection-halo" cx="@F(x)" cy="@F(y)" r="11" />
+                            }
+                            @if (point.Result.IsEligible)
+                            {
+                                <circle class="model-mark eligible-mark" cx="@F(x)" cy="@F(y)" r="4.5" />
+                            }
+                            else
+                            {
+                                <rect class="model-mark excluded-mark" x="@F(x - 4)" y="@F(y - 4)" width="8" height="8" transform="rotate(45 @F(x) @F(y))" />
+                            }
+                            @if (_valueFrontierKeys.Contains(point.Key))
+                            {
+                                <rect class="frontier-ring" x="@F(x - 7)" y="@F(y - 7)" width="14" height="14" />
+                            }
+                            @if (ShouldLabel(point))
+                            {
+                                @SvgText("point-label", x + 9, y - 9, ShortModelName(point.Result.Model.DisplayName, 23))
+                            }
+                        </g>
+                    }
+                    <text class="axis-title" x="521" y="410">ADJUSTED INTELLIGENCE · INDEX</text>
+                    <text class="axis-title vertical-title" x="18" y="197" transform="rotate(-90 18 197)">EXPECTED VALUE / 1K TASKS · USD</text>
+                </svg>
+            </div>
+        </article>
+
+        <div class="visualization-lower-grid">
+            <article class="visualization-panel cost-anatomy-panel">
+                <div class="visualization-heading compact-heading">
+                    <div>
+                        <p>Cost anatomy / 1k</p>
+                        <h2>Economic cost by model</h2>
+                    </div>
+                    <span>Sorted by total</span>
+                </div>
+                <div class="cost-legend" aria-label="Cost component legend">
+                    <span class="legend-model">Model</span>
+                    <span class="legend-review">Review</span>
+                    <span class="legend-retry">Retry</span>
+                    <span class="legend-latency">Latency</span>
+                    <span class="legend-critical">Critical fail</span>
+                    <span class="legend-benign">Benign fail</span>
+                </div>
+                <div class="cost-chart-scroll">
+                    <svg class="cost-chart" viewBox="0 0 760 @F(CostChartHeight)" role="img" aria-labelledby="cost-anatomy-title cost-anatomy-desc">
+                        <title id="cost-anatomy-title">Economic cost anatomy by model</title>
+                        <desc id="cost-anatomy-desc">Every model is sorted from lowest to highest total economic cost. Each horizontal bar separates model, review, retry, latency, critical failure, and benign failure costs.</desc>
+                        @foreach (var indexed in _costPoints.Select((point, index) => (point, index)))
+                        {
+                            var point = indexed.point;
+                            var y = 24 + indexed.index * 28;
+                            var cumulative = 0d;
+                            <g class="@BarClass(point)"
+                               @onmouseenter="() => Hover(point.Key)"
+                               @onmouseleave="ClearHover"
+                               @onclick="() => Select(point.Key)">
+                                <title>@CostTooltip(point)</title>
+                                <rect class="cost-track" x="245" y="@F(y - 8)" width="420" height="14" />
+                                @foreach (var segment in CostSegments(point))
+                                {
+                                    var segmentX = CostBarX(cumulative);
+                                    var segmentWidth = CostBarWidth(segment.Value);
+                                    <rect class="cost-segment @segment.CssClass" x="@F(segmentX)" y="@F(y - 8)" width="@F(segmentWidth)" height="14" />
+                                    cumulative += segment.Value;
+                                }
+                                <rect class="bar-selection" x="2" y="@F(y - 11)" width="3" height="20" />
+                                @SvgText("bar-model-label", 12, y + 3, ShortModelName(point.Result.Model.DisplayName, 30))
+                                @SvgText("bar-total-label", 750, y + 3, CurrencyTick(point.TotalEconomicCostUsd))
+                            </g>
+                        }
+                    </svg>
+                </div>
+            </article>
+
+            <article class="visualization-panel cost-outcome-panel">
+                <div class="visualization-heading compact-heading">
+                    <div>
+                        <p>Price of the outcome</p>
+                        <h2>Economic cost versus expected value</h2>
+                    </div>
+                    <span>Log X · frontier traced</span>
+                </div>
+                <div class="chart-viewport outcome-chart">
+                    <svg viewBox="0 0 720 520" role="img" aria-labelledby="cost-outcome-title cost-outcome-desc">
+                        <title id="cost-outcome-title">Economic cost versus expected value</title>
+                        <desc id="cost-outcome-desc">Models are plotted by total economic cost on a logarithmic horizontal axis and expected value per one thousand tasks on the vertical axis. The step line traces models not dominated by a cheaper model with equal or greater value.</desc>
+                        <rect class="chart-frame" x="72" y="34" width="620" height="416" />
+                        @foreach (var tick in _valueYTicks)
+                        {
+                            <line class="grid-line" x1="72" x2="692" y1="@F(OutcomeY(tick))" y2="@F(OutcomeY(tick))" />
+                            @SvgText("axis-label y-label", 60, OutcomeY(tick) + 4, CurrencyTick(tick))
+                        }
+                        @foreach (var tick in _costXTicks)
+                        {
+                            <line class="tick-line" x1="@F(OutcomeX(tick))" x2="@F(OutcomeX(tick))" y1="450" y2="456" />
+                            @SvgText("axis-label", OutcomeX(tick), 474, CurrencyTick(tick))
+                        }
+                        @if (_valueYExtent.Minimum <= 0 && _valueYExtent.Maximum >= 0)
+                        {
+                            <line class="break-even-line" x1="72" x2="692" y1="@F(OutcomeY(0))" y2="@F(OutcomeY(0))" />
+                        }
+                        <path class="frontier-path step-frontier" d="@CostFrontierPath" />
+                        @foreach (var point in _points.Where(point => point.TotalEconomicCostUsd > 0))
+                        {
+                            var x = OutcomeX(point.TotalEconomicCostUsd);
+                            var y = OutcomeY(point.ExpectedValueUsd);
+                            <g class="@PointClass(point, _costFrontierKeys)"
+                               @onmouseenter="() => Hover(point.Key)"
+                               @onmouseleave="ClearHover"
+                               @onclick="() => Select(point.Key)">
+                                <title>@PointTooltip(point)</title>
+                                @if (point.Key == DisplayKey)
+                                {
+                                    <circle class="selection-halo" cx="@F(x)" cy="@F(y)" r="11" />
+                                }
+                                @if (point.Result.IsEligible)
+                                {
+                                    <circle class="model-mark eligible-mark" cx="@F(x)" cy="@F(y)" r="4.5" />
+                                }
+                                else
+                                {
+                                    <rect class="model-mark excluded-mark" x="@F(x - 4)" y="@F(y - 4)" width="8" height="8" transform="rotate(45 @F(x) @F(y))" />
+                                }
+                                @if (_costFrontierKeys.Contains(point.Key))
+                                {
+                                    <rect class="frontier-ring" x="@F(x - 7)" y="@F(y - 7)" width="14" height="14" />
+                                }
+                                @if (ShouldLabel(point))
+                                {
+                                    @SvgText("point-label", x + 9, y - 9, ShortModelName(point.Result.Model.DisplayName, 18))
+                                }
+                            </g>
+                        }
+                        <text class="axis-title" x="382" y="508">TOTAL ECONOMIC COST / 1K · USD · LOG SCALE</text>
+                        <text class="axis-title vertical-title" x="18" y="242" transform="rotate(-90 18 242)">EXPECTED VALUE / 1K · USD</text>
+                    </svg>
+                </div>
+            </article>
+        </div>
+    </section>
+}

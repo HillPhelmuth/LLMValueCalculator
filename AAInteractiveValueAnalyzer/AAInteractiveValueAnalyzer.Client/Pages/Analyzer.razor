@@ -596,6 +596,15 @@ else if (ActiveModalResult is not null)
                 @onclick="() => SelectResultsTab(ResultsTab.FullUniverse)">
             Full Universe <span>@summary.Results.Count</span>
         </button>
+        <button type="button"
+                id="visualizations-results-tab"
+                class="results-tab @(ActiveResultsTab == ResultsTab.Visualizations ? "active" : null)"
+                role="tab"
+                aria-selected="@(ActiveResultsTab == ResultsTab.Visualizations)"
+                aria-controls="visualizations-results-panel"
+                @onclick="() => SelectResultsTab(ResultsTab.Visualizations)">
+            Visualizations <span>@summary.Results.Count</span>
+        </button>
     </div>
 
 <div id="ranked-results-panel"
@@ -1289,6 +1298,14 @@ else
     </div>
 }
 </section>
+</div>
+<div id="visualizations-results-panel"
+     class="results-tab-panel"
+     role="tabpanel"
+     aria-labelledby="visualizations-results-tab"
+     tabindex="0"
+     hidden="@(ActiveResultsTab != ResultsTab.Visualizations)">
+    <AnalysisVisualizationDashboard Summary="summary" />
 </div>
 </section>
 
