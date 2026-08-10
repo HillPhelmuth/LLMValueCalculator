@@ -1,5 +1,6 @@
 using AAInteractiveValueAnalyzer.Client.Services;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using Radzen;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.Services.AddHttpClient("ApiClient", client =>
@@ -11,4 +12,5 @@ builder.Services.AddScoped<ModelCatalog>();
 builder.Services.AddScoped<CalibrationProfileProvider>();
 builder.Services.AddScoped<CalibrationSettingsService>();
 builder.Services.AddScoped<RecommendationEngine>();
+builder.Services.AddRadzenComponents();
 await builder.Build().RunAsync();

@@ -20,11 +20,29 @@ internal sealed record VisualizationCostBreakdown(
 internal sealed record VisualizationPoint(
     string Key,
     RecommendationResult Result,
-    VisualizationCostBreakdown Costs)
+    VisualizationCostBreakdown Costs,
+    int LabelOrdinal = 0)
 {
+    private double LabelOffset => LabelOrdinal * 0.0000001;
+
     public double AdjustedIntelligence => Result.AdjustedIntelligence;
+    public double AdjustedIntelligenceLabelCoordinate => AdjustedIntelligence + LabelOffset;
     public double ExpectedValueUsd => Result.ExpectedValuePerTaskUsd;
+    public double ExpectedValueLabelCoordinate => ExpectedValueUsd + LabelOffset;
     public double TotalEconomicCostUsd => Costs.TotalEconomicCostUsd;
+    public double LogEconomicCost => TotalEconomicCostUsd > 0 ? Math.Log10(TotalEconomicCostUsd) : double.NaN;
+    public double EffectiveSuccessRate => Result.EffectiveSuccessRate;
+    public double SuccessPercent => Result.EffectiveSuccessRate * 100;
+    public double SuccessPerDollar => Result.SuccessPerDollar;
+    public double CriticalFailurePercent => Result.CriticalFailureRate * 100;
+    public double ExpectedLatencySeconds => Result.ExpectedLatencySeconds;
+    public double ModelCostUsd => Costs.ModelCostUsd;
+    public double ReviewCostUsd => Costs.ReviewCostUsd;
+    public double RetryCostUsd => Costs.RetryCostUsd;
+    public double LatencyCostUsd => Costs.LatencyCostUsd.GetValueOrDefault();
+    public double CriticalFailureCostUsd => Costs.CriticalFailureCostUsd;
+    public double BenignFailureCostUsd => Costs.BenignFailureCostUsd;
+    public string ModelLabel => Result.Model.DisplayName;
 }
 
 internal static class VisualizationChartData
@@ -38,6 +56,7 @@ internal static class VisualizationChartData
                 && IsFinite(point.ExpectedValueUsd)
                 && IsFinite(point.TotalEconomicCostUsd))
             .OrderBy(point => point.Key, StringComparer.Ordinal)
+            .Select((point, index) => point with { LabelOrdinal = index + 1 })
             .ToArray();
 
     public static VisualizationCostBreakdown CreateCostBreakdown(RecommendationResult result) => new(
@@ -68,6 +87,61 @@ internal static class VisualizationChartData
             .Where(point => !points.Any(other => other.Key != point.Key && DominatesCostValue(other, point)))
             .OrderBy(point => point.TotalEconomicCostUsd)
             .ThenByDescending(point => point.ExpectedValueUsd)
+            .ThenBy(point => point.Key, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    public static IReadOnlyList<VisualizationPoint> FindCostIntelligenceFrontier(IEnumerable<VisualizationPoint> source)
+    {
+        var points = source.Where(point => IsPlottable(point) && point.TotalEconomicCostUsd > 0).ToArray();
+        return points
+            .Where(point => !points.Any(other => other.Key != point.Key && DominatesCostIntelligence(other, point)))
+            .OrderBy(point => point.TotalEconomicCostUsd)
+            .ThenBy(point => point.AdjustedIntelligence)
+            .ThenBy(point => point.Key, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    public static IReadOnlyList<VisualizationPoint> FindCostBandEnvelope(
+        IEnumerable<VisualizationPoint> source,
+        int maximumBands = 14)
+    {
+        var points = source
+            .Where(point => IsPlottable(point) && point.TotalEconomicCostUsd > 0)
+            .OrderBy(point => point.TotalEconomicCostUsd)
+            .ThenBy(point => point.Key, StringComparer.Ordinal)
+            .ToArray();
+
+        if (points.Length <= 2 || maximumBands <= 1)
+        {
+            return points;
+        }
+
+        var minimumLogCost = Math.Log10(points[0].TotalEconomicCostUsd);
+        var maximumLogCost = Math.Log10(points[^1].TotalEconomicCostUsd);
+        if (NearlyEqual(minimumLogCost, maximumLogCost))
+        {
+            return points
+                .OrderByDescending(point => point.ExpectedValueUsd)
+                .ThenBy(point => point.TotalEconomicCostUsd)
+                .ThenBy(point => point.Key, StringComparer.Ordinal)
+                .Take(1)
+                .ToArray();
+        }
+
+        var bandCount = Math.Clamp(maximumBands, 2, points.Length);
+        var bandWidth = (maximumLogCost - minimumLogCost) / bandCount;
+
+        return points
+            .GroupBy(point => Math.Min(
+                bandCount - 1,
+                (int)Math.Floor((Math.Log10(point.TotalEconomicCostUsd) - minimumLogCost) / bandWidth)))
+            .Select(group => group
+                .OrderByDescending(point => point.ExpectedValueUsd)
+                .ThenBy(point => point.TotalEconomicCostUsd)
+                .ThenBy(point => point.Key, StringComparer.Ordinal)
+                .First())
+            .OrderBy(point => point.TotalEconomicCostUsd)
             .ThenBy(point => point.Key, StringComparer.Ordinal)
             .ToArray();
     }
@@ -175,6 +249,15 @@ internal static class VisualizationChartData
         var strictlyBetter = candidate.TotalEconomicCostUsd < point.TotalEconomicCostUsd - EqualityTolerance
             || candidate.ExpectedValueUsd > point.ExpectedValueUsd + EqualityTolerance;
         return noMoreExpensive && atLeastAsValuable && strictlyBetter;
+    }
+
+    private static bool DominatesCostIntelligence(VisualizationPoint candidate, VisualizationPoint point)
+    {
+        var noMoreExpensive = candidate.TotalEconomicCostUsd <= point.TotalEconomicCostUsd + EqualityTolerance;
+        var atLeastAsIntelligent = candidate.AdjustedIntelligence >= point.AdjustedIntelligence - EqualityTolerance;
+        var strictlyBetter = candidate.TotalEconomicCostUsd < point.TotalEconomicCostUsd - EqualityTolerance
+            || candidate.AdjustedIntelligence > point.AdjustedIntelligence + EqualityTolerance;
+        return noMoreExpensive && atLeastAsIntelligent && strictlyBetter;
     }
 
     private static double NonNegativeOrZero(double value) => IsFinite(value) ? Math.Max(0, value) : 0;

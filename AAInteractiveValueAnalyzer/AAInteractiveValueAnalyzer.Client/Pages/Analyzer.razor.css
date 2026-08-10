@@ -233,11 +233,10 @@
 
 .command-metrics article {
     min-width: 0;
-    min-height: 82px;
+    min-height: 64px;
     display: grid;
     align-content: center;
-    gap: 7px;
-    padding: 12px 19px;
+    padding: 0px 19px;
     border-right: 1px solid var(--deck-border);
 }
 

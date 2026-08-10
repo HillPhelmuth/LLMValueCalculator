@@ -6,6 +6,25 @@ namespace AAInteractiveValueAnalyzer.Tests;
 public sealed class VisualizationChartDataTests
 {
     [Fact]
+    public void CreatePoints_AssignsUniqueNativeLabelCoordinatesToTiedValues()
+    {
+        var summary = new AnalysisSummary
+        {
+            Results =
+            [
+                Result("zeta", 50, 100, 20, modelCost: 20),
+                Result("alpha", 50, 100, 20, modelCost: 20)
+            ]
+        };
+
+        var points = VisualizationChartData.CreatePoints(summary);
+
+        Assert.Equal(["alpha", "zeta"], points.Select(point => point.Result.Model.Name));
+        Assert.Equal(2, points.Select(point => point.ExpectedValueLabelCoordinate).Distinct().Count());
+        Assert.Equal(2, points.Select(point => point.AdjustedIntelligenceLabelCoordinate).Distinct().Count());
+    }
+
+    [Fact]
     public void CreateCostBreakdown_AggregatesEveryEconomicCostComponent()
     {
         var breakdown = VisualizationChartData.CreateCostBreakdown(Result(
@@ -72,6 +91,59 @@ public sealed class VisualizationChartDataTests
         var frontier = VisualizationChartData.FindCostValueFrontier(points);
 
         Assert.Equal(["cheap", "balanced", "premium"], frontier.Select(point => point.Result.Model.Name));
+    }
+
+    [Fact]
+    public void FindCostIntelligenceFrontier_UsesLowerCostAndHigherCapabilityDominance()
+    {
+        var points = new[]
+        {
+            Point("cheap", 40, 80, 10),
+            Point("balanced", 55, 100, 20),
+            Point("dominated", 50, 150, 25),
+            Point("capable", 70, 90, 40)
+        };
+
+        var frontier = VisualizationChartData.FindCostIntelligenceFrontier(points);
+
+        Assert.Equal(["cheap", "balanced", "capable"], frontier.Select(point => point.Result.Model.Name));
+    }
+
+    [Fact]
+    public void FindCostBandEnvelope_RemainsVisibleWhenStrictFrontierHasOnePoint()
+    {
+        var points = new[]
+        {
+            Point("best-and-cheapest", 60, 200, 1),
+            Point("low-band", 55, 160, 10),
+            Point("middle-band", 50, 140, 100),
+            Point("high-band", 45, 100, 1000)
+        };
+
+        Assert.Single(VisualizationChartData.FindCostValueFrontier(points));
+
+        var envelope = VisualizationChartData.FindCostBandEnvelope(points, maximumBands: 4);
+
+        Assert.Equal(4, envelope.Count);
+        Assert.Equal(
+            ["best-and-cheapest", "low-band", "middle-band", "high-band"],
+            envelope.Select(point => point.Result.Model.Name));
+    }
+
+    [Fact]
+    public void FindCostBandEnvelope_SelectsTheHighestValueInEachLogCostBand()
+    {
+        var points = new[]
+        {
+            Point("low-value", 50, 100, 1),
+            Point("low-winner", 50, 150, 2),
+            Point("middle", 50, 140, 12),
+            Point("high", 50, 130, 100)
+        };
+
+        var envelope = VisualizationChartData.FindCostBandEnvelope(points, maximumBands: 3);
+
+        Assert.Equal(["low-winner", "middle", "high"], envelope.Select(point => point.Result.Model.Name));
     }
 
     [Fact]
