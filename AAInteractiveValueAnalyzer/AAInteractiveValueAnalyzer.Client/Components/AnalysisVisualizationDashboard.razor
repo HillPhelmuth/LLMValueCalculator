@@ -1,4 +1,4 @@
-@if (_points.Count == 0)
+@if (_allPoints.Count == 0)
 {
     <section class="visualization-empty" role="status">
         <h2>Visualizations unavailable</h2>
@@ -8,20 +8,43 @@
 else
 {
     var selected = SelectedPoint;
-    <section class="visualization-dashboard" aria-label="Linked model visualizations">
+    <section class="visualization-dashboard" aria-label="Interactive model analysis visualizations">
         <div class="visualization-toolbar">
+            <label class="chart-picker">
+                <span>Visualization</span>
+                <select @bind="_selectedChart" aria-label="Choose a model analysis visualization">
+                    @foreach (var option in ChartOptions)
+                    {
+                        <option value="@option.Kind">@option.Label</option>
+                    }
+                </select>
+            </label>
             <label class="provider-filter">
                 <span>Model provider</span>
                 <select @bind="ProviderFilter" aria-label="Filter visualizations by model provider">
-                    <option value="">All providers (@_allPoints.Count)</option>
+                    <option value="">All providers (@FilteredUniverseCount)</option>
                     @foreach (var provider in _providers)
                     {
                         <option value="@provider.Name">@provider.Name (@provider.Count)</option>
                     }
                 </select>
             </label>
-            <span class="provider-filter-count">@_points.Count of @_allPoints.Count models plotted</span>
+            <label class="chart-filter-toggle">
+                <input type="checkbox" @bind="HideExcludedModels" />
+                <span><strong>Hide excluded</strong><small>Only eligible models in charts</small></span>
+            </label>
+            <span class="provider-filter-count">14 chart lenses · @_points.Count shown · @_allPoints.Count total</span>
         </div>
+
+        @if (_points.Count == 0)
+        {
+            <section class="visualization-empty" role="status">
+                <h2>No models match these filters</h2>
+                <p>Show excluded models or choose another provider.</p>
+            </section>
+        }
+        else
+        {
         @if (selected is not null)
         {
             <header class="selection-strip @(selected.Result.IsEligible ? "eligible" : "excluded")" aria-live="polite">
@@ -35,196 +58,397 @@ else
                     <div><dt>Success</dt><dd>@Percent(selected.Result.EffectiveSuccessRate)</dd></div>
                     <div><dt>EV / 1k</dt><dd>@Currency(selected.ExpectedValueUsd)</dd></div>
                     <div><dt>Economic cost / 1k</dt><dd>@Currency(selected.TotalEconomicCostUsd)</dd></div>
-                    <div><dt>Latency cost</dt><dd>@LatencyCostLabel(selected)</dd></div>
+                    <div><dt>Critical risk</dt><dd>@Percent(selected.Result.CriticalFailureRate)</dd></div>
                 </dl>
                 <p class="selection-note">@SelectionNote(selected)</p>
             </header>
         }
 
-        <article class="visualization-panel value-frontier-panel">
+        <article class="visualization-panel">
             <div class="visualization-heading">
                 <div>
-                    <p>Value frontier · all models</p>
-                    <h2>Expected value across adjusted intelligence</h2>
+                    <p>@ActiveChart.Label</p>
+                    <h2>@ActiveChart.Description</h2>
                 </div>
-                <span>@_valueFrontier.Count frontier · @_points.Count plotted</span>
+                @if (SupportsPointLabels)
+                {
+                    <label class="point-label-toggle">
+                        <input type="checkbox" @bind="_showPointLabels" />
+                        <span><strong>Point labels</strong><small>Show model names on point charts</small></span>
+                    </label>
+                }
+                <span>Radzen · click marks to inspect</span>
             </div>
-            <div class="chart-viewport wide-chart">
-                <svg viewBox="0 0 1000 420" role="group" aria-labelledby="value-frontier-title value-frontier-desc">
-                    <title id="value-frontier-title">Expected value by adjusted intelligence</title>
-                    <desc id="value-frontier-desc">All analyzed models are plotted by adjusted intelligence and expected value per one thousand tasks. Eligible models are circles, excluded models are diamonds, and the non-dominated value frontier is outlined in lime. Use arrow keys on a focused model to move through the plot and Enter or Space to select it.</desc>
-                    <rect class="chart-frame" x="70" y="34" width="902" height="326" />
-                    @foreach (var tick in _valueYTicks)
-                    {
-                        <line class="grid-line" x1="70" x2="972" y1="@F(ValueY(tick))" y2="@F(ValueY(tick))" />
-                        @SvgText("axis-label y-label", 58, ValueY(tick) + 4, CurrencyTick(tick))
-                    }
-                    @foreach (var tick in _valueXTicks)
-                    {
-                        <line class="tick-line" x1="@F(ValueX(tick))" x2="@F(ValueX(tick))" y1="360" y2="366" />
-                        @SvgText("axis-label", ValueX(tick), 382, Number(tick, "0.#"))
-                    }
-                    @if (_valueYExtent.Minimum <= 0 && _valueYExtent.Maximum >= 0)
-                    {
-                        <line class="break-even-line" x1="70" x2="972" y1="@F(ValueY(0))" y2="@F(ValueY(0))" />
-                        @SvgText("break-even-label", 80, ValueY(0) - 8, "BREAK EVEN")
-                    }
-                    <path class="frontier-path" d="@ValueFrontierPath" />
-                    @foreach (var point in _keyboardPoints)
-                    {
-                        var x = ValueX(point.AdjustedIntelligence);
-                        var y = ValueY(point.ExpectedValueUsd);
-                        <g id="@PointElementId(point)"
-                           class="@PointClass(point, _valueFrontierKeys)"
-                           role="button"
-                           tabindex="@(point.Key == _rovingKey ? 0 : -1)"
-                           aria-label="@PointAriaLabel(point)"
-                           @onfocus="() => SetRovingKey(point.Key)"
-                           @onmouseenter="() => Hover(point.Key)"
-                           @onmouseleave="ClearHover"
-                           @onclick="() => Select(point.Key)"
-                           @onkeydown="args => HandlePointKeyDown(args, point.Key)">
-                            <title>@PointTooltip(point)</title>
-                            @if (point.Key == DisplayKey)
+
+            <div class="radzen-chart-shell" @key="_selectedChart">
+                @switch (_selectedChart)
+                {
+                    case ChartKind.ValueFrontier:
+                        <div class="chart-stage standard-stage">
+                            <RadzenChart SeriesClick="@HandleSeriesClick" AllowSeriesHover="true" Animate="true">
+                                <RadzenBubbleSeries TItem="VisualizationPoint" Data="@_points.Where(point => point.Result.IsEligible)"
+                                                    CategoryProperty="AdjustedIntelligence" ValueProperty="ExpectedValueLabelCoordinate"
+                                                    SizeProperty="SuccessPerDollar" MinSize="6" MaxSize="25"
+                                                    Title="Eligible models" Fill="#b6d94c" Stroke="#e8ff9a">
+                                    <ChildContent>
+                                        <RadzenSeriesDataLabels Visible="@_showPointLabels" Formatter="@ExpectedValuePointLabel"
+                                                                Position="DataLabelPosition.Auto" Appearance="DataLabelAppearance.Outline"
+                                                                AllowOverlap="false" OffsetX="5" OffsetY="-3" Fill="#e8ff9a" />
+                                    </ChildContent>
+                                    <TooltipTemplate Context="point">
+                                        <div class="chart-tooltip"><strong>@point.ModelLabel</strong><span>EV @Currency(point.ExpectedValueUsd)</span><span>IQ @Number(point.AdjustedIntelligence, "0.0") · @Percent(point.EffectiveSuccessRate) success</span></div>
+                                    </TooltipTemplate>
+                                </RadzenBubbleSeries>
+                                @if (!_hideExcludedModels)
+                                {
+                                <RadzenScatterSeries TItem="VisualizationPoint" Data="@_points.Where(point => !point.Result.IsEligible)"
+                                                     CategoryProperty="AdjustedIntelligence" ValueProperty="ExpectedValueLabelCoordinate"
+                                                     Title="Excluded models" Fill="#81483f" Stroke="#e46e5a">
+                                    <ChildContent>
+                                        <RadzenMarkers Visible="true" MarkerType="MarkerType.Diamond" Size="7" Fill="#81483f" Stroke="#e46e5a" />
+                                        <RadzenSeriesDataLabels Visible="@_showPointLabels" Formatter="@ExpectedValuePointLabel"
+                                                                Position="DataLabelPosition.Auto" Appearance="DataLabelAppearance.Outline"
+                                                                AllowOverlap="false" OffsetX="5" OffsetY="-3" Fill="#e9a093" />
+                                    </ChildContent>
+                                    <TooltipTemplate Context="point">
+                                        <div class="chart-tooltip"><strong>@point.ModelLabel</strong><span>EV @Currency(point.ExpectedValueUsd)</span><span>@Percent(point.EffectiveSuccessRate) success · excluded</span></div>
+                                    </TooltipTemplate>
+                                </RadzenScatterSeries>
+                                }
+                                <RadzenLineSeries TItem="VisualizationPoint" Data="@_valueFrontier"
+                                                  CategoryProperty="AdjustedIntelligence" ValueProperty="ExpectedValueUsd"
+                                                  Title="Pareto-optimal frontier" Stroke="#d9ff67" StrokeWidth="2" LineType="LineType.Dashed" >
+                                    <RadzenMarkers Visible="true" MarkerType="MarkerType.Square" Size="5" Fill="#0a0c0e" Stroke="#d9ff67" />
+                                </RadzenLineSeries>
+                                <RadzenCategoryAxis>
+                                    <RadzenAxisTitle Text="Adjusted intelligence" />
+                                    <RadzenGridLines Visible="true" Stroke="#252a2f" />
+                                    <RadzenAxisCrosshair Visible="true" Stroke="#73849a" />
+                                </RadzenCategoryAxis>
+                                <RadzenValueAxis Formatter="@CurrencyAxis">
+                                    <RadzenAxisTitle Text="Expected value / 1k tasks" />
+                                    <RadzenGridLines Visible="true" Stroke="#252a2f" />
+                                    <RadzenAxisCrosshair Visible="true" Stroke="#73849a" />
+                                </RadzenValueAxis>
+                                <RadzenLegend Position="LegendPosition.Bottom" />
+                                <RadzenChartTooltipOptions HighlightDataPoint="true" Trigger="ChartTooltipTrigger.Point" />
+                            </RadzenChart>
+                        </div>
+                        break;
+
+                    case ChartKind.CostValue:
+                        <div class="chart-stage standard-stage">
+                            <RadzenChart SeriesClick="@HandleSeriesClick" AllowZoom="false" AllowPan="true" Animate="true">
+                                @* <RadzenChartTooltipOptions Shared="true" /> *@
+                                <RadzenBubbleSeries TItem="VisualizationPoint" Data="@_points.Where(point => point.TotalEconomicCostUsd > 0)"
+                                                    CategoryProperty="LogEconomicCost" ValueProperty="ExpectedValueLabelCoordinate"
+                                                    SizeProperty="SuccessPercent" MinSize="5" MaxSize="22"
+                                                    Title="Models (bubble = success)" Fill="#92a653" Stroke="#d9ff67">
+                                    <ChildContent>
+                                        <RadzenSeriesDataLabels Visible="@_showPointLabels" Formatter="@ExpectedValuePointLabel"
+                                                                Position="DataLabelPosition.Auto" Appearance="DataLabelAppearance.Outline"
+                                                                AllowOverlap="false" OffsetX="5" OffsetY="-3" Fill="#efffba" />
+                                    </ChildContent>
+                                    <TooltipTemplate Context="point">
+                                        <div class="chart-tooltip"><strong>@point.ModelLabel</strong><span>@Currency(point.TotalEconomicCostUsd) cost → @Currency(point.ExpectedValueUsd) EV</span><span>@Percent(point.EffectiveSuccessRate) success</span></div>
+                                    </TooltipTemplate>
+                                </RadzenBubbleSeries>
+                                <RadzenLineSeries TItem="VisualizationPoint" Data="@_costBandEnvelope"
+                                                  CategoryProperty="LogEconomicCost" ValueProperty="ExpectedValueUsd"
+                                                  Title="Best EV in each cost band" Stroke="#efff7d" StrokeWidth="4">
+                                    <ChildContent>
+                                        <RadzenMarkers Visible="true" MarkerType="MarkerType.Square" Size="7" Fill="#080a0c" Stroke="#efff7d"/>
+                                    </ChildContent>
+                                    <TooltipTemplate Context="point">
+                                        <div class="chart-tooltip"><strong>@point.ModelLabel</strong><span>Cost-band leader</span><span>@Currency(point.TotalEconomicCostUsd) cost → @Currency(point.ExpectedValueUsd) EV</span></div>
+                                    </TooltipTemplate>
+                                </RadzenLineSeries>
+                                <RadzenScatterSeries TItem="VisualizationPoint" Data="@_costFrontier"
+                                                     CategoryProperty="LogEconomicCost" ValueProperty="ExpectedValueUsd"
+                                                     Title="Strict Pareto-optimal frontier" Fill="#080a0c" Stroke="#ffffff">
+                                    <ChildContent>
+                                        <RadzenMarkers Visible="true" MarkerType="MarkerType.Diamond" Size="12" Fill="#080a0c" Stroke="#ffffff" />
+                                    </ChildContent>
+                                    <TooltipTemplate Context="point">
+                                        <div class="chart-tooltip"><strong>@point.ModelLabel</strong><span>Strictly Pareto-optimal on cost and value</span><span>@Currency(point.TotalEconomicCostUsd) cost → @Currency(point.ExpectedValueUsd) EV</span></div>
+                                    </TooltipTemplate>
+                                </RadzenScatterSeries>
+                                <RadzenCategoryAxis Formatter="@LogCurrencyAxis">
+                                    <RadzenAxisTitle Text="Total economic cost / 1k · logarithmic"/>
+                                    <RadzenGridLines Visible="true" Stroke="#252a2f"/>
+                                </RadzenCategoryAxis>
+                                <RadzenValueAxis Formatter="@CurrencyAxis">
+                                    <RadzenAxisTitle Text="Expected value / 1k tasks"/>
+                                    <RadzenGridLines Visible="true" Stroke="#252a2f"/>
+                                </RadzenValueAxis>
+                                <RadzenLegend Position="LegendPosition.Bottom"/>
+                            </RadzenChart>
+                        </div>
+                        break;
+
+                    case ChartKind.CostAnatomy:
+                        <div class="chart-stage scroll-stage" style="--chart-height: @(CostChartHeight)px">
+                            <RadzenChart SeriesClick="@HandleSeriesClick" Style="@($"height: {CostChartHeight}px")" ColorScheme="ColorScheme.Pastel">
+                                <RadzenStackedBarSeries TItem="VisualizationPoint" Data="@_rankedByCost" CategoryProperty="ModelLabel" ValueProperty="ModelCostUsd" Title="Model" Fill="#b6d94c" />
+                                <RadzenStackedBarSeries TItem="VisualizationPoint" Data="@_rankedByCost" CategoryProperty="ModelLabel" ValueProperty="ReviewCostUsd" Title="Review" Fill="#92a653" />
+                                <RadzenStackedBarSeries TItem="VisualizationPoint" Data="@_rankedByCost" CategoryProperty="ModelLabel" ValueProperty="RetryCostUsd" Title="Retry" Fill="#5d7134" />
+                                <RadzenStackedBarSeries TItem="VisualizationPoint" Data="@_rankedByCost" CategoryProperty="ModelLabel" ValueProperty="LatencyCostUsd" Title="Latency" Fill="#73849a" />
+                                <RadzenStackedBarSeries TItem="VisualizationPoint" Data="@_rankedByCost" CategoryProperty="ModelLabel" ValueProperty="CriticalFailureCostUsd" Title="Critical failure" Fill="#e46e5a" />
+                                <RadzenStackedBarSeries TItem="VisualizationPoint" Data="@_rankedByCost" CategoryProperty="ModelLabel" ValueProperty="BenignFailureCostUsd" Title="Benign failure" Fill="#81483f" />
+                                <RadzenCategoryAxis Formatter="@CurrencyAxis"><RadzenGridLines Visible="true" Stroke="#252a2f" /></RadzenCategoryAxis>
+                                <RadzenValueAxis Width="240" />
+                                <RadzenLegend Position="LegendPosition.Bottom" />
+                                <RadzenChartTooltipOptions Shared="true" />
+
+                            </RadzenChart>
+                        </div>
+                        break;
+
+                    case ChartKind.CostPareto:
+                        <div class="pareto-provider-legend" aria-label="Model provider colors">
+                            <span><i class="quadrant-key"></i>Most attractive quadrant</span>
+                            <span><i class="pareto-key"></i>Pareto line</span>
+                            @foreach (var provider in _paretoProviders)
                             {
-                                <circle class="selection-halo" cx="@F(x)" cy="@F(y)" r="11" />
+                                <span><i style="background: @provider.Color"></i>@provider.Provider</span>
                             }
-                            @if (point.Result.IsEligible)
+                        </div>
+                        <div class="chart-stage standard-stage">
+                            <RadzenChart SeriesClick="@HandleSeriesClick" AllowPan="true" Animate="true">
+                                <RadzenRangeAreaSeries TItem="AttractiveRegionDatum" Data="@_attractiveRegion"
+                                                       CategoryProperty="LogCost" MinProperty="MinimumIntelligence" MaxProperty="MaximumIntelligence"
+                                                       Fill="#243f2c" Stroke="#496b50" StrokeWidth="1" />
+                                @foreach (var provider in _paretoProviders)
+                                {
+                                    <RadzenScatterSeries TItem="VisualizationPoint" Data="@provider.Points"
+                                                         CategoryProperty="LogEconomicCost" ValueProperty="AdjustedIntelligenceLabelCoordinate"
+                                                         Fill="@provider.Color" Stroke="#080a0c">
+                                        <ChildContent>
+                                            <RadzenMarkers Visible="true" MarkerType="MarkerType.Circle" Size="8" Fill="@provider.Color" Stroke="#080a0c" />
+                                            <RadzenSeriesDataLabels Visible="@_showPointLabels" Formatter="@IntelligencePointLabel"
+                                                                    Position="DataLabelPosition.Auto" Appearance="DataLabelAppearance.Outline"
+                                                                    AllowOverlap="false" OffsetX="5" OffsetY="-3" Fill="#e6e9e1" />
+                                        </ChildContent>
+                                        <TooltipTemplate Context="point">
+                                            <div class="chart-tooltip"><strong>@point.ModelLabel</strong><span>@point.Result.Model.Provider</span><span>@Currency(point.TotalEconomicCostUsd) economic cost · @Number(point.AdjustedIntelligence, "0.0") adjusted IQ</span></div>
+                                        </TooltipTemplate>
+                                    </RadzenScatterSeries>
+                                }
+                                <RadzenLineSeries TItem="VisualizationPoint" Data="@_paretoFrontier"
+                                                  CategoryProperty="LogEconomicCost" ValueProperty="AdjustedIntelligence"
+                                                  Stroke="#efff7d" StrokeWidth="3" LineType="LineType.Dotted">
+                                    <ChildContent>
+                                        <RadzenMarkers Visible="true" Size="8" Fill="#080a0c" Stroke="#efff7d" />
+                                    </ChildContent>
+                                    <TooltipTemplate Context="point"><div class="chart-tooltip"><strong>@point.ModelLabel</strong><span>Pareto-efficient · @Currency(point.TotalEconomicCostUsd) cost · @Number(point.AdjustedIntelligence, "0.0") adjusted IQ</span></div></TooltipTemplate>
+                                </RadzenLineSeries>
+                                <RadzenCategoryAxis Formatter="@LogCurrencyAxis">
+                                    <RadzenAxisTitle Text="Total economic cost / 1k tasks · logarithmic" />
+                                    <RadzenGridLines Visible="true" Stroke="#252a2f" />
+                                    <RadzenAxisCrosshair Visible="true" Stroke="#73849a" />
+                                </RadzenCategoryAxis>
+                                <RadzenValueAxis>
+                                    <RadzenAxisTitle Text="Adjusted intelligence" />
+                                    <RadzenGridLines Visible="true" Stroke="#252a2f" />
+                                    <RadzenAxisCrosshair Visible="true" Stroke="#73849a" />
+                                </RadzenValueAxis>
+                                <RadzenLegend Visible="false" />
+                                <RadzenChartTooltipOptions HighlightDataPoint="true" Trigger="ChartTooltipTrigger.Point" />
+                            </RadzenChart>
+                        </div>
+                        break;
+
+                    case ChartKind.ProviderDrilldown:
+                        <div class="drilldown-bar">
+                            @if (_drilldownProvider is not null)
                             {
-                                <circle class="model-mark eligible-mark" cx="@F(x)" cy="@F(y)" r="4.5" />
+                                <button type="button" @onclick="ExitDrilldown">← All providers</button>
+                                <span>@_drilldownProvider · model expected value</span>
                             }
                             else
                             {
-                                <rect class="model-mark excluded-mark" x="@F(x - 4)" y="@F(y - 4)" width="8" height="8" transform="rotate(45 @F(x) @F(y))" />
+                                <span>Provider average expected value · click a bar to drill down</span>
                             }
-                            @if (_valueFrontierKeys.Contains(point.Key))
-                            {
-                                <rect class="frontier-ring" x="@F(x - 7)" y="@F(y - 7)" width="14" height="14" />
-                            }
-                            @if (ShouldLabel(point))
-                            {
-                                @SvgText("point-label", x + 9, y - 9, ShortModelName(point.Result.Model.DisplayName, 23))
-                            }
-                        </g>
-                    }
-                    <text class="axis-title" x="521" y="410">ADJUSTED INTELLIGENCE · INDEX</text>
-                    <text class="axis-title vertical-title" x="18" y="197" transform="rotate(-90 18 197)">EXPECTED VALUE / 1K TASKS · USD</text>
-                </svg>
+                        </div>
+                        <div class="chart-stage scroll-stage" style="--chart-height: @(DrilldownChartHeight)px">
+                            <RadzenChart SeriesClick="@HandleSeriesClick" Style="@($"height: {DrilldownChartHeight}px")" Animate="true">
+                                <RadzenBarSeries TItem="DrilldownDatum" Data="@_drilldownData" CategoryProperty="Label" ValueProperty="Value"
+                                                 Title="@(_drilldownProvider is null ? "Provider average EV" : "Model EV")" Fill="#b6d94c">
+                                    <TooltipTemplate Context="item"><div class="chart-tooltip"><strong>@item.Label</strong><span>@Currency(item.Value) EV · @item.ModelCount model@(item.ModelCount == 1 ? "" : "s")</span></div></TooltipTemplate>
+                                </RadzenBarSeries>
+                                <RadzenCategoryAxis Formatter="@CurrencyAxis"><RadzenGridLines Visible="true" Stroke="#252a2f" /></RadzenCategoryAxis>
+                                <RadzenValueAxis Width="260" />
+                            </RadzenChart>
+                        </div>
+                        break;
+
+                    case ChartKind.ValueCandlestick:
+                        <div class="chart-stage standard-stage">
+                            <RadzenChart SeriesClick="@HandleSeriesClick" AllowZoom="false" AllowPan="true" Animate="true">
+                                <RadzenCandlestickSeries TItem="CandleDatum" Data="@_candles" CategoryProperty="Index"
+                                                        LowProperty="Low" OpenProperty="Open" HighProperty="High" CloseProperty="Close"
+                                                        Title="Value envelope" BullFill="#92a653" BullStroke="#d9ff67" BearFill="#81483f" BearStroke="#e46e5a">
+                                    <TooltipTemplate Context="item"><div class="chart-tooltip"><strong>@item.Model</strong><span>Net EV @Currency(item.Close) · gross @Currency(item.High)</span><span>Direct spend @Currency(Math.Abs(item.Open)) · downside @Currency(Math.Abs(item.Low))</span></div></TooltipTemplate>
+                                </RadzenCandlestickSeries>
+                                <RadzenCategoryAxis Step="1" Formatter="@CandleCategoryAxis" LabelRotation="-45" />
+                                <RadzenValueAxis Formatter="@CurrencyAxis"><RadzenGridLines Visible="true" Stroke="#252a2f" /></RadzenValueAxis>
+                                <RadzenLegend Position="LegendPosition.Bottom" />
+                            </RadzenChart>
+                        </div>
+                        break;
+
+                    case ChartKind.SelectedWaterfall:
+                        <div class="chart-stage standard-stage">
+                            <RadzenChart Animate="true">
+                                <RadzenWaterfallSeries TItem="WaterfallDatum" Data="@_waterfall" CategoryProperty="Label" ValueProperty="Amount"
+                                                       SummaryProperty="IsSummary" Title="Value bridge"
+                                                       PositiveFill="#b6d94c" NegativeFill="#e46e5a" SummaryFill="#73849a" Stroke="#0a0c0e">
+                                    <TooltipTemplate Context="item"><div class="chart-tooltip"><strong>@item.Label</strong><span>@(item.IsSummary ? "Cumulative total" : "Change") @Currency(item.DisplayAmount)</span></div></TooltipTemplate>
+                                </RadzenWaterfallSeries>
+                                <RadzenCategoryAxis LabelRotation="-25" />
+                                <RadzenValueAxis Min="@_waterfallAxisMinimum" Max="@_waterfallAxisMaximum" Formatter="@CurrencyAxis">
+                                    <RadzenAxisTitle Text="Cumulative value / 1k · zoomed to deductions" />
+                                    <RadzenGridLines Visible="true" Stroke="#252a2f" />
+                                </RadzenValueAxis>
+                            </RadzenChart>
+                        </div>
+                        break;
+
+                    case ChartKind.ProviderBoxPlot:
+                        <div class="chart-stage standard-stage">
+                            <RadzenChart Animate="true">
+                                <RadzenBoxPlotSeries TItem="BoxPlotDatum" Data="@_boxPlots" CategoryProperty="Provider"
+                                                     LowerWhiskerProperty="Low" LowerQuartileProperty="Q1" MedianProperty="Median"
+                                                     UpperQuartileProperty="Q3" UpperWhiskerProperty="High" MeanProperty="Mean"
+                                                     ShowMean="true" Title="Provider EV distribution" Fill="#5d7134" Stroke="#d9ff67" MedianStroke="#ffffff" MeanFill="#e46e5a" />
+                                <RadzenCategoryAxis LabelRotation="-35" />
+                                <RadzenValueAxis Formatter="@CurrencyAxis"><RadzenGridLines Visible="true" Stroke="#252a2f" /></RadzenValueAxis>
+                            </RadzenChart>
+                        </div>
+                        break;
+
+                    case ChartKind.ModelRadar:
+                        <div class="chart-stage radar-stage">
+                            <RadzenSpiderChart ShowMarkers="true" ShowAxisValues="true" GridShape="SpiderChartGridShape.Polygon">
+                                <RadzenSpiderSeries TItem="RadarDatum" Data="@_selectedRadar" CategoryProperty="Metric" ValueProperty="Score" Title="@selected?.Result.Model.DisplayName" FormatString="{0:0}" />
+                                <RadzenSpiderSeries TItem="RadarDatum" Data="@_medianRadar" CategoryProperty="Metric" ValueProperty="Score" Title="Cohort median" FormatString="{0:0}" />
+                                <RadzenSpiderLegend Position="LegendPosition.Bottom" />
+                            </RadzenSpiderChart>
+                        </div>
+                        break;
+
+                    case ChartKind.ReliabilityRange:
+                        <div class="chart-stage scroll-stage" style="--chart-height: @(RangeChartHeight)px">
+                            <RadzenChart SeriesClick="@HandleSeriesClick" Style="@($"height: {RangeChartHeight}px")" Animate="true">
+                                <RadzenRangeBarSeries TItem="RangeDatum" Data="@_reliabilityRanges" CategoryProperty="Model"
+                                                      MinProperty="FirstAttempt" MaxProperty="Effective" Title="Retry-policy uplift"
+                                                      Fill="#92a653" Stroke="#d9ff67">
+                                    <TooltipTemplate Context="item"><div class="chart-tooltip"><strong>@item.Model</strong><span>@Number(item.FirstAttempt, "0.0")% → @Number(item.Effective, "0.0")%</span><span>+@Number(item.Uplift, "0.0") points · @Number(item.ExpectedAttempts, "0.00") expected attempts</span></div></TooltipTemplate>
+                                </RadzenRangeBarSeries>
+                                <RadzenCategoryAxis Width="250" />
+                                <RadzenValueAxis Min="0" Max="100" Formatter="@PercentAxis">
+                                    <RadzenGridLines Visible="true" Stroke="#252a2f" />
+                                </RadzenValueAxis>
+                                <RadzenLegend Position="LegendPosition.Bottom" />
+                            </RadzenChart>
+                        </div>
+                        break;
+
+                    case ChartKind.SuccessBullet:
+                        <div class="chart-stage scroll-stage" style="--chart-height: @(BulletChartHeight)px">
+                            <RadzenChart SeriesClick="@HandleSeriesClick" Style="@($"height: {BulletChartHeight}px")" Animate="true">
+                                <RadzenBulletSeries TItem="BulletDatum" Data="@_bulletData" CategoryProperty="Model" ValueProperty="Success"
+                                                    TargetProperty="Target" MaxProperty="Maximum" Title="Effective success"
+                                                    Fill="#b6d94c" TargetStroke="#e46e5a"
+                                                    RangeThresholds="@(new double[] { 70, 85, 95, 100 })"
+                                                    RangeColors="@(new string[] { "#241d1c", "#2b2b23", "#27301f", "#344126" })" />
+                                <RadzenCategoryAxis Min="0" Max="100" Formatter="@PercentAxis"><RadzenGridLines Visible="true" Stroke="#252a2f" /></RadzenCategoryAxis>
+                                <RadzenValueAxis Width="250" />
+                            </RadzenChart>
+                        </div>
+                        break;
+
+                    case ChartKind.EligibilityFunnel:
+                        <div class="chart-stage standard-stage">
+                            <RadzenChart Animate="true">
+                                <RadzenFunnelSeries TItem="FunnelDatum" Data="@_funnelData" CategoryProperty="Stage" ValueProperty="Count"
+                                                    Title="Models remaining" ShowLabels="true"
+                                                    Fills="@(new string[] { "#73849a", "#6f8051", "#92a653", "#a9c44d", "#d9ff67" })" />
+                            </RadzenChart>
+                        </div>
+                        break;
+
+                    case ChartKind.ProviderOpportunity:
+                        <div class="chart-stage standard-stage">
+                            <RadzenChart SeriesClick="@HandleSeriesClick" Animate="true">
+                                <RadzenDonutSeries TItem="ProviderShareDatum" Data="@_providerShares" CategoryProperty="Provider" ValueProperty="Value"
+                                                   Title="Positive EV share" InnerRadius="120" SegmentGap="2" CornerRadius="4" ExplodeOffset="8"
+                                                   Fills="@(new string[] { "#d9ff67", "#b6d94c", "#92a653", "#73849a", "#5d7134", "#9b6350", "#81483f", "#4f657a", "#b49b5b", "#69726c" })">
+                                    <TitleTemplate><div class="donut-title"><strong>@_providerShares.Count</strong><span>providers</span></div></TitleTemplate>
+                                    <TooltipTemplate Context="item">
+                                        <div class="chart-tooltip">
+                                            <strong>@item.Provider</strong>
+                                            <span>Positive EV share @Currency(item.Value)</span>
+                                        </div>
+                                    </TooltipTemplate>
+                                </RadzenDonutSeries>
+                                <RadzenLegend Position="LegendPosition.Right" />
+                            </RadzenChart>
+                        </div>
+                        break;
+
+                    case ChartKind.ValueHeatmap:
+                        <div class="model-heatmap-intro">
+                            <p>Top @_heatmapRows.Count models from the current filters by expected value. Cell intensity represents relative desirability across all @_points.Count filtered models.</p>
+                            <div class="model-heatmap-key" aria-label="Cell intensity scale from lower to higher desirability">
+                                <span>Lower</span><i></i><span>Better</span>
+                            </div>
+                        </div>
+                        <div class="model-heatmap-scroll">
+                            <table class="model-heatmap-table">
+                                <caption>Model desirability heatmap ranked by expected value</caption>
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Model</th>
+                                        <th scope="col">Capability <small>higher is better</small></th>
+                                        <th scope="col">Success <small>higher is better</small></th>
+                                        <th scope="col">EV / 1k <small>higher is better</small></th>
+                                        <th scope="col">Direct cost <small>lower is better</small></th>
+                                        <th scope="col">Latency <small>lower is better</small></th>
+                                        <th scope="col">Critical fail <small>lower is better</small></th>
+                                        <th scope="col">Success / $ <small>higher is better</small></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in _heatmapRows)
+                                    {
+                                        <tr class="@(row.Point.Key == _selectedKey ? "selected" : null)">
+                                            <th scope="row">
+                                                <button type="button" @onclick="() => Select(row.Point.Key)" aria-label="Inspect @row.Point.ModelLabel">
+                                                    <span class="model-heatmap-rank">@row.Rank.ToString("00")</span>
+                                                    <span class="model-heatmap-name"><strong>@row.Point.ModelLabel</strong><small>@row.Point.Result.Model.Provider</small></span>
+                                                    @if (!row.Point.Result.IsEligible)
+                                                    {
+                                                        <span class="model-heatmap-excluded">Excluded</span>
+                                                    }
+                                                </button>
+                                            </th>
+                                            <td style="@HeatmapCellStyle(row.CapabilityScore)" title="@HeatmapCellTitle(row.CapabilityScore)">@Number(row.Point.AdjustedIntelligence, "0.0")</td>
+                                            <td style="@HeatmapCellStyle(row.SuccessScore)" title="@HeatmapCellTitle(row.SuccessScore)">@Percent(row.Point.EffectiveSuccessRate)</td>
+                                            <td style="@HeatmapCellStyle(row.ExpectedValueScore)" title="@HeatmapCellTitle(row.ExpectedValueScore)">@HeatmapCurrency(row.Point.ExpectedValueUsd)</td>
+                                            <td style="@HeatmapCellStyle(row.DirectCostScore)" title="@HeatmapCellTitle(row.DirectCostScore)">@HeatmapCurrency(row.Point.Result.ExpectedTotalDirectCostUsd)</td>
+                                            <td class="@(row.LatencyScore is null ? "unavailable" : null)" style="@HeatmapCellStyle(row.LatencyScore)" title="@HeatmapCellTitle(row.LatencyScore)">@(row.Point.Result.Model.HasLatencyData ? $"{Number(row.Point.ExpectedLatencySeconds, "0.0")}s" : "—")</td>
+                                            <td style="@HeatmapCellStyle(row.CriticalFailureScore)" title="@HeatmapCellTitle(row.CriticalFailureScore)">@PercentPrecise(row.Point.Result.CriticalFailureRate)</td>
+                                            <td style="@HeatmapCellStyle(row.SuccessPerDollarScore)" title="@HeatmapCellTitle(row.SuccessPerDollarScore)">@Number(row.Point.SuccessPerDollar, "#,##0.#")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        break;
+                }
             </div>
         </article>
-
-        <div class="visualization-lower-grid">
-            <article class="visualization-panel cost-anatomy-panel">
-                <div class="visualization-heading compact-heading">
-                    <div>
-                        <p>Cost anatomy / 1k</p>
-                        <h2>Economic cost by model</h2>
-                    </div>
-                    <span>Sorted by total</span>
-                </div>
-                <div class="cost-legend" aria-label="Cost component legend">
-                    <span class="legend-model">Model</span>
-                    <span class="legend-review">Review</span>
-                    <span class="legend-retry">Retry</span>
-                    <span class="legend-latency">Latency</span>
-                    <span class="legend-critical">Critical fail</span>
-                    <span class="legend-benign">Benign fail</span>
-                </div>
-                <div class="cost-chart-scroll">
-                    <svg class="cost-chart" viewBox="0 0 760 @F(CostChartHeight)" role="img" aria-labelledby="cost-anatomy-title cost-anatomy-desc">
-                        <title id="cost-anatomy-title">Economic cost anatomy by model</title>
-                        <desc id="cost-anatomy-desc">Every model is sorted from lowest to highest total economic cost. Each horizontal bar separates model, review, retry, latency, critical failure, and benign failure costs.</desc>
-                        @foreach (var indexed in _costPoints.Select((point, index) => (point, index)))
-                        {
-                            var point = indexed.point;
-                            var y = 24 + indexed.index * 28;
-                            var cumulative = 0d;
-                            <g class="@BarClass(point)"
-                               @onmouseenter="() => Hover(point.Key)"
-                               @onmouseleave="ClearHover"
-                               @onclick="() => Select(point.Key)">
-                                <title>@CostTooltip(point)</title>
-                                <rect class="cost-track" x="245" y="@F(y - 8)" width="420" height="14" />
-                                @foreach (var segment in CostSegments(point))
-                                {
-                                    var segmentX = CostBarX(cumulative);
-                                    var segmentWidth = CostBarWidth(segment.Value);
-                                    <rect class="cost-segment @segment.CssClass" x="@F(segmentX)" y="@F(y - 8)" width="@F(segmentWidth)" height="14" />
-                                    cumulative += segment.Value;
-                                }
-                                <rect class="bar-selection" x="2" y="@F(y - 11)" width="3" height="20" />
-                                @SvgText("bar-model-label", 12, y + 3, ShortModelName(point.Result.Model.DisplayName, 30))
-                                @SvgText("bar-total-label", 750, y + 3, CurrencyTick(point.TotalEconomicCostUsd))
-                            </g>
-                        }
-                    </svg>
-                </div>
-            </article>
-
-            <article class="visualization-panel cost-outcome-panel">
-                <div class="visualization-heading compact-heading">
-                    <div>
-                        <p>Price of the outcome</p>
-                        <h2>Economic cost versus expected value</h2>
-                    </div>
-                    <span>Log X · frontier traced</span>
-                </div>
-                <div class="chart-viewport outcome-chart">
-                    <svg viewBox="0 0 720 520" role="img" aria-labelledby="cost-outcome-title cost-outcome-desc">
-                        <title id="cost-outcome-title">Economic cost versus expected value</title>
-                        <desc id="cost-outcome-desc">Models are plotted by total economic cost on a logarithmic horizontal axis and expected value per one thousand tasks on the vertical axis. The step line traces models not dominated by a cheaper model with equal or greater value.</desc>
-                        <rect class="chart-frame" x="72" y="34" width="620" height="416" />
-                        @foreach (var tick in _valueYTicks)
-                        {
-                            <line class="grid-line" x1="72" x2="692" y1="@F(OutcomeY(tick))" y2="@F(OutcomeY(tick))" />
-                            @SvgText("axis-label y-label", 60, OutcomeY(tick) + 4, CurrencyTick(tick))
-                        }
-                        @foreach (var tick in _costXTicks)
-                        {
-                            <line class="tick-line" x1="@F(OutcomeX(tick))" x2="@F(OutcomeX(tick))" y1="450" y2="456" />
-                            @SvgText("axis-label", OutcomeX(tick), 474, CurrencyTick(tick))
-                        }
-                        @if (_valueYExtent.Minimum <= 0 && _valueYExtent.Maximum >= 0)
-                        {
-                            <line class="break-even-line" x1="72" x2="692" y1="@F(OutcomeY(0))" y2="@F(OutcomeY(0))" />
-                        }
-                        <path class="frontier-path step-frontier" d="@CostFrontierPath" />
-                        @foreach (var point in _points.Where(point => point.TotalEconomicCostUsd > 0))
-                        {
-                            var x = OutcomeX(point.TotalEconomicCostUsd);
-                            var y = OutcomeY(point.ExpectedValueUsd);
-                            <g class="@PointClass(point, _costFrontierKeys)"
-                               @onmouseenter="() => Hover(point.Key)"
-                               @onmouseleave="ClearHover"
-                               @onclick="() => Select(point.Key)">
-                                <title>@PointTooltip(point)</title>
-                                @if (point.Key == DisplayKey)
-                                {
-                                    <circle class="selection-halo" cx="@F(x)" cy="@F(y)" r="11" />
-                                }
-                                @if (point.Result.IsEligible)
-                                {
-                                    <circle class="model-mark eligible-mark" cx="@F(x)" cy="@F(y)" r="4.5" />
-                                }
-                                else
-                                {
-                                    <rect class="model-mark excluded-mark" x="@F(x - 4)" y="@F(y - 4)" width="8" height="8" transform="rotate(45 @F(x) @F(y))" />
-                                }
-                                @if (_costFrontierKeys.Contains(point.Key))
-                                {
-                                    <rect class="frontier-ring" x="@F(x - 7)" y="@F(y - 7)" width="14" height="14" />
-                                }
-                                @if (ShouldLabel(point))
-                                {
-                                    @SvgText("point-label", x + 9, y - 9, ShortModelName(point.Result.Model.DisplayName, 18))
-                                }
-                            </g>
-                        }
-                        <text class="axis-title" x="382" y="508">TOTAL ECONOMIC COST / 1K · USD · LOG SCALE</text>
-                        <text class="axis-title vertical-title" x="18" y="242" transform="rotate(-90 18 242)">EXPECTED VALUE / 1K · USD</text>
-                    </svg>
-                </div>
-            </article>
-        </div>
+        }
     </section>
 }
