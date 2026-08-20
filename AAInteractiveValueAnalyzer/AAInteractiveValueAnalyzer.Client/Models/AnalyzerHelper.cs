@@ -91,7 +91,7 @@ public static class AnalyzerHelper
             "Raises or lowers the modeled critical-failure rate without changing success probability."),
         ["aa-task-multiplier"] = new FieldHelp(
             "Manual cost and latency adjustment",
-            "Applies a manual adjustment after the automatic workload cost factor fitted from Artificial Analysis benchmark medians.",
+            "Applies a manual adjustment to the cost-per-task total after the automatic workload cost factor fitted from Artificial Analysis benchmark medians.",
             "Multiplies the automatic factor derived from Context, Reasoning, and Tool use before expected model cost, direct cost, cost per 1,000 successful tasks, and expected value are computed."),
         ["value-per-success"] = new FieldHelp(
             "Value per 1,000 full successes",

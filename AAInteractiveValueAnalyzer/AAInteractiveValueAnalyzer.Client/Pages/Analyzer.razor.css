@@ -820,6 +820,63 @@
     line-height: 1.55;
 }
 
+.preset-disclosure,
+.preset-disclosure .section-heading,
+.preset-disclosure .section-heading > div,
+.preset-values-disclosure {
+    min-width: 0;
+}
+
+.preset-disclosure .section-heading > div {
+    width: 100%;
+}
+
+.preset-disclosure .section-heading p {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
+.preset-disclosure-summary {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    cursor: pointer;
+    list-style: none;
+}
+
+.preset-disclosure-summary::-webkit-details-marker {
+    display: none;
+}
+
+.preset-disclosure-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.preset-disclosure-label-less {
+    display: none;
+}
+
+.preset-values-disclosure[open] .preset-disclosure-label-more {
+    display: none;
+}
+
+.preset-values-disclosure[open] .preset-disclosure-label-less {
+    display: inline;
+}
+
+.preset-disclosure-chevron {
+    display: inline-block;
+    transition: transform 150ms ease-out;
+}
+
+.preset-values-disclosure[open] .preset-disclosure-chevron {
+    transform: rotate(90deg);
+}
+
 .config-drawer:not([open]) > :not(summary) {
     display: none;
 }

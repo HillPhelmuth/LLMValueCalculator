@@ -54,6 +54,7 @@ public class ArtificialAnalysisIntelligenceIndexCost
 
     [JsonPropertyName("cost_per_task")]
     public CostPerTask? CostPerTask { get; set; }
+    public int NumberOfTasks => (int)(TotalCost / (CostPerTask?.TotalCost ?? 1));
 }
 
 public class CostPerTask

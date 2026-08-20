@@ -480,3 +480,6 @@ FodyWeavers.xsd
 /AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer/AAOutput
 /AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/obj/Debug/net10.0/AAInteractiveValueAnalyzer.Client.csproj.AssemblyReference.cache
 /AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer/obj/Debug/net10.0/staticwebassets.removed.txt
+/AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/obj/AAInteractiveValueAnalyzer.Client.csproj.nuget.g.props
+/AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/obj/AAInteractiveValueAnalyzer.Client.csproj.nuget.g.targets
+/AAInteractiveValueAnalyzer/AAInteractiveValueAnalyzer.Client/obj/Debug/net10.0/hotreload/Microsoft.DotNet.HotReload.WebAssembly.Browser.lib.module.js

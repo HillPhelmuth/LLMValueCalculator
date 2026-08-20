@@ -7,26 +7,26 @@
 
 Model Value Analyzer is a workload-specific model selection tool. It helps compare LLMs by combining Artificial Analysis [intelligence](https://artificialanalysis.ai/#intelligence) and [cost](https://artificialanalysis.ai/#price-and-cost) data with your own estimate of task difficulty, quality requirements, failure tolerance, retry behavior, review cost, and business value.
 
-The goal is not to declare one universal best model. The goal is to make the tradeoff explicit for a specific use case.
+The goal is to make the tradeoff explicit for a specific use case.
 
 ## What It Helps Answer
 
 Use the analyzer when you want to estimate:
 
-- Which models are likely to meet a required success rate.
+- Which models are likely to meet a required success rate for your task.
 - Which models stay under an acceptable critical-failure rate.
 - How retries, validation, and human review change the economics.
 - Whether a cheaper model has enough quality for the workload.
 - Whether a higher-quality model earns back its higher direct cost.
 - How task category and guardrails affect the recommendation.
 
-The output should be treated as a planning estimate. Production decisions should be validated with real evals and real usage data.
+**The output should be treated as a planning estimate.** Production decisions should be validated with real evals and real usage data.
 
 ## Basic Workflow
 
 1. Choose a task category.
 
-   Categories act as presets and priors. For example, extraction and classification start with lower modeled difficulty than research or agentic workflows.
+   Categories act as presets and assumptions. For example, extraction and classification start with lower modeled difficulty than research or agentic workflows.
 
 2. Tune the workload inputs.
 
@@ -150,7 +150,7 @@ All models with sufficient data on [Artificial Analysis](https://artificialanaly
 
 ## Important Assumptions
 
-The analyzer uses Artificial Analysis intelligence and cost values as priors. They are useful starting points, but they are not substitutes for workload-specific evaluation.
+The analyzer uses Artificial Analysis intelligence and cost values as assumptions. They are useful starting points, but they are not substitutes for workload-specific evaluation.
 
 Critical failures are estimated from overall failure probability, a configured share of failures that are critical, and exposure multipliers from risk factors and guardrails.
 

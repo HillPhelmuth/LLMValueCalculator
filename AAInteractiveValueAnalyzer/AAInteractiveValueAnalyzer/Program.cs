@@ -71,6 +71,11 @@ app.MapGet("api/models", async () =>
         response.Models.AddRange(responseJson.Data!.Where(x => x.ArtificialAnalysisIntelligenceIndexCost is not null));
     }
     response.Models = response.Models.DistinctBy(x => x.Id).ToList();
+    response.Models.ForEach(item =>
+    {
+        item.Name = item.Name.Replace("Adaptive Reasoning, ", "").Replace(" Effort", "").Trim();
+    });
+
 #if DEBUG
     var json = JsonSerializer.Serialize(response, new JsonSerializerOptions { WriteIndented = true });
     var basePath = @"C:\Users\adamh\source\repos\LLMValueCalculator";
