@@ -4,6 +4,8 @@ Interactive LLM EV Calculator is a workload-specific model selection tool. It he
 
 The goal is not to declare one universal best model. The goal is to make the tradeoff explicit for a specific use case.
 
+## [Try it out](https://llm-value-calc.azurewebsites.net)
+
 ## What It Helps Answer
 
 Use the analyzer when you want to estimate:
